@@ -57,3 +57,17 @@
 * **As a** User,
 * **I want** to manually clear or configure automatic pruning for old telemetry logs,
 * **So that** I can manage my local storage and keep the application lightweight over time.
+
+### Module 4: AI & Alert Configuration
+
+**US-09: Configure AI Provider**
+
+* **As a** User,
+* **I want** to select my model based on the AI provider
+* **So that** I can use the LLM of my choice to power my database troubleshooting sessions.
+
+**US-10: Configure Alert Thresholds**
+
+* **As a** User,
+* **I want** to customize warning limits and performance thresholds for each of my database projects,
+* **So that** I am only notified about performance issues that actually matter to my specific project instead of getting false alarms.

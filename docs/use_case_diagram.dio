@@ -1,11 +1,11 @@
 <mxfile host="65bd71144e">
     <diagram id="LzpNyMNa9gR3PsE9VxKH" name="Page-1">
-        <mxGraphModel dx="1160" dy="954" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="924" dy="697" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
                 <mxCell id="RUHDRu01aVMCGTYzu142-2" parent="1" style="swimlane;startSize=0;" value="" vertex="1">
-                    <mxGeometry height="630" width="430" x="220" y="120" as="geometry"/>
+                    <mxGeometry height="820" width="430" x="220" y="120" as="geometry"/>
                 </mxCell>
                 <mxCell id="RUHDRu01aVMCGTYzu142-8" parent="RUHDRu01aVMCGTYzu142-2" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="UC-01:&amp;nbsp;Configure Database Credentials" vertex="1">
                     <mxGeometry height="80" width="145" x="20" y="20" as="geometry"/>
@@ -53,6 +53,12 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
+                <mxCell id="4Q0JgDt1eczCpIh_NDS2-1" parent="RUHDRu01aVMCGTYzu142-2" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;UC-09: Configure AI Provider&lt;/span&gt;" vertex="1">
+                    <mxGeometry height="80" width="120" x="20" y="630" as="geometry"/>
+                </mxCell>
+                <mxCell id="4Q0JgDt1eczCpIh_NDS2-2" parent="RUHDRu01aVMCGTYzu142-2" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="UC-10: Configure Alert Thresholds" vertex="1">
+                    <mxGeometry height="80" width="120" x="20" y="720" as="geometry"/>
+                </mxCell>
                 <mxCell id="RUHDRu01aVMCGTYzu142-17" edge="1" parent="1" source="RUHDRu01aVMCGTYzu142-4" style="edgeStyle=none;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;endArrow=none;endFill=0;" target="RUHDRu01aVMCGTYzu142-9">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
@@ -66,6 +72,12 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="RUHDRu01aVMCGTYzu142-21" edge="1" parent="1" source="RUHDRu01aVMCGTYzu142-4" style="edgeStyle=none;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="RUHDRu01aVMCGTYzu142-14">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="4Q0JgDt1eczCpIh_NDS2-3" edge="1" parent="1" source="RUHDRu01aVMCGTYzu142-4" style="edgeStyle=none;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="4Q0JgDt1eczCpIh_NDS2-1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="4Q0JgDt1eczCpIh_NDS2-4" edge="1" parent="1" source="RUHDRu01aVMCGTYzu142-4" style="edgeStyle=none;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="4Q0JgDt1eczCpIh_NDS2-2">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="RUHDRu01aVMCGTYzu142-4" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="User" vertex="1">
