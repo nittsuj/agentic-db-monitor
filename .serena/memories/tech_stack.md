@@ -10,6 +10,7 @@
 - Vite `^8`, `laravel-vite-plugin` `^3.1`, `@tailwindcss/vite` `^4`, `tailwindcss` `^4`.
 - Entry points: `resources/css/app.css`, `resources/js/app.js` (see `vite.config.js`).
 - Fonts: Bunny "Instrument Sans" (400/500/600) via vite plugin.
+- UI components: Livewire 3 + Flux UI (free tier, `livewire/flux`) — chosen for imported components. Install via `composer require livewire/flux` + `php artisan flux:install`.
 - Package manager: npm (`.npmrc` present); `type: module`.
 
 ## Dev / test tooling
