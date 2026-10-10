@@ -90,3 +90,6 @@ flowchart TD
 - *Ask & approve:* `UI → Agent`; the Agent calls read-only tools through the Drivers, and any mutation is proposed to the Guardrail Engine, which halts the loop for approval before the Driver executes it.
 - *Monitor:* the Worker triggers metric collection and threshold evaluation; a breach produces an OS notification.
 - *Persist:* chat, profiles, metrics, and the audit trail are written to the local SQLite store through the Core.
+
+See also: [`entity_relationship_diagram.md`](./entity_relationship_diagram.md),
+[`implementation_plan.md`](./implementation_plan.md) § 3.
