@@ -19,3 +19,8 @@
 - Logs: `laravel/pail` `^1.2.5`.
 - `nunomaduro/collision`, `mockery/mockery`, `fakerphp/faker`.
 - Optional: `@laravel/multiplex` (npm optionalDependency).
+
+## Not yet installed (Phase 0 pending)
+- `nativephp/desktop` v2, `livewire/livewire`, `livewire/flux` (free), `prism-php/prism`.
+- Installed pins worth noting: `laravel/framework` 13.35.0; `ramsey/uuid` present in the
+  dependency tree → `Str::uuid7()` is available (UUID v7 PKs, `HasUuids`).

@@ -11,6 +11,8 @@ Platform: Windows, PowerShell 5.1. Do NOT chain with `&&`; use `;` or `cmd1; if 
 ## Database
 - Migrate: `php artisan migrate`
 - Fresh + seed: `php artisan migrate:fresh --seed`
+- Re-seed demo data (idempotent, safe to repeat): `php artisan db:seed`
+- Specific seeder: `php artisan db:seed --class=Database\Seeders\DemoSeeder`
 
 ## Frontend
 - Dev server: `npm run dev`
