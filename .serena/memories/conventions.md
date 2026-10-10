@@ -14,3 +14,8 @@ Standard Laravel conventions; no custom deviations established yet (project is a
   `resources/css/app.css` via `@theme` (no `tailwind.config.js`).
 - Formatting enforced with Laravel Pint.
 - Do NOT add code comments unless necessary.
+- Full naming conventions (PHP cases, tables/columns/FKs, migrations, enums, models,
+  Livewire 3, docs-folder rules) live in `docs/naming_conventions.md` — UUID v7 PKs
+  (`uuid('id')`/`foreignUuid`, `HasUuids`), enums PascalCase cases + lowercase values,
+  component tags kebab-case, docs folders snake_case with identical basenames across
+  diagram types.
