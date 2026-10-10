@@ -26,3 +26,6 @@ Conventions are now crystallized (not open questions). Full naming rules live in
   (`uuid('id')`/`foreignUuid`, `HasUuids`), enums PascalCase cases + lowercase values,
   component tags kebab-case, docs folders snake_case with identical basenames across
   diagram types.
+- `README.md` is project-owned and deliberately minimal: title + one-line description,
+  requirements, setup. Keep it timeless — no status/progress, no feature listing, no demo
+  credentials, no Laravel framework boilerplate. Extend it only on explicit user request.
