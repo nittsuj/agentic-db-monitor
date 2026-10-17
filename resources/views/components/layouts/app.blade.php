@@ -13,6 +13,18 @@
             <flux:sidebar.item icon="chart-bar" :href="route('dashboard')" :current="request()->routeIs('dashboard')">
                 Dashboard
             </flux:sidebar.item>
+            <flux:sidebar.item icon="chat-bubble-left-right" :href="route('chat')" :current="request()->routeIs('chat')">
+                Chat
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="shield-check" :href="route('approvals')" :current="request()->routeIs('approvals')">
+                Approvals
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="cog-6-tooth" :href="route('settings.ai')" :current="request()->routeIs('settings.ai')">
+                AI Settings
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="adjustments-horizontal" :href="route('thresholds')" :current="request()->routeIs('thresholds')">
+                Thresholds
+            </flux:sidebar.item>
         </flux:sidebar.nav>
 
         <flux:sidebar.nav class="mt-6">
