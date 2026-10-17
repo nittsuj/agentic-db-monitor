@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Livewire\Chat;
 
+use App\Enums\ActionStatus;
 use App\Enums\ChatRole;
 use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Models\PendingAction;
 use App\Models\Project;
 use App\Services\Database\DiagnosticTools;
+use App\Services\Database\StatementClassifier;
 use App\Services\Database\TargetConnectionManager;
 use Illuminate\View\View;
 use Livewire\Component;
 use Prism\Prism\Facades\Prism;
+use Prism\Prism\Schema\StringSchema;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
+use Prism\Prism\Tool;
 
 class ChatWindow extends Component
 {
@@ -86,6 +91,39 @@ class ChatWindow extends Component
         $connection = app(TargetConnectionManager::class)->connect($project);
         $driver = DiagnosticTools::driverFor($project->driver->value);
         $tools = DiagnosticTools::for($connection, $driver);
+
+        $chatSessionId = $this->chatSessionId;
+
+        $proposeTool = (new Tool)
+            ->as('propose_mutation')
+            ->for('Propose a mutating SQL statement (INSERT/UPDATE/DELETE/DDL/maintenance) for explicit user approval. The statement is NOT executed; it is queued for approval. Only use for statements the user has requested.')
+            ->withParameter(new StringSchema('command', 'The exact SQL statement to propose'))
+            ->using(function (string $command) use ($project, $chatSessionId) {
+                $category = app(StatementClassifier::class)->classify($command);
+
+                if ($category === null) {
+                    return ['status' => 'rejected', 'reason' => 'Statement is read-only or not recognized; use diagnostic tools instead.'];
+                }
+
+                $action = PendingAction::create([
+                    'project_id' => $project->id,
+                    'chat_session_id' => $chatSessionId,
+                    'engine' => $project->driver->value,
+                    'category' => $category,
+                    'command' => $command,
+                    'status' => ActionStatus::Pending,
+                    'proposed_at' => now(),
+                ]);
+
+                return [
+                    'status' => 'pending_approval',
+                    'pending_action_id' => $action->id,
+                    'category' => $category->value,
+                    'message' => 'Action proposed and awaiting user approval. Do not execute or retry; inform the user.',
+                ];
+            });
+
+        $tools[] = $proposeTool;
 
         $aiSetting = AiSetting::where('is_active', true)->first();
         $provider = 'ollama';

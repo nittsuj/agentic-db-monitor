@@ -10,7 +10,8 @@
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
         "livewire/flux": "^2.20",
-        "livewire/livewire": "^3.7"
+        "livewire/livewire": "^3.7",
+        "prism-php/prism": "^0.102.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

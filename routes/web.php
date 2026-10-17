@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Approvals\ApprovalQueue;
 use App\Livewire\Chat\ChatWindow;
 use App\Livewire\Dashboard\HealthDashboard;
 use App\Livewire\Projects\ThresholdManager;
@@ -13,6 +14,7 @@ Route::get('/', function () {
 
 Route::get('/dashboard', HealthDashboard::class)->name('dashboard');
 Route::get('/chat', ChatWindow::class)->name('chat');
+Route::get('/approvals', ApprovalQueue::class)->name('approvals');
 
 Route::get('/settings/ai', AiSettingsForm::class)->name('settings.ai');
 Route::get('/thresholds', ThresholdManager::class)->name('thresholds');
