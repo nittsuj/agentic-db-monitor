@@ -21,13 +21,13 @@ alerts, and prune old telemetry.
 | --- | --- | --- | --- | --- |
 | 0 | Foundations | ✅ Complete | ✅ | ✅ |
 | 1 | Local store & credentials | ✅ Complete | ✅ | ✅ |
-| 2 | AI diagnostics core | 🔄 In progress | — | — |
+| 2 | AI diagnostics core | ✅ Complete | ✅ | ✅ |
 | 3 | Guardrails: per-write approval | ⏳ Not started | — | — |
 | 4 | Background monitoring & alerts | ⏳ Not started | — | — |
 | 5 | Retention | ⏳ Not started | — | — |
 | 6 | Definition of Done / Packaging | ⏳ Not started | — | — |
 
-**Current branch:** `main` · **Test suite:** 58 tests / 147 assertions · all green.
+**Current branch:** `main` · **Test suite:** 62 tests / 158 assertions · all green.
 
 ---
 
@@ -553,18 +553,15 @@ Exit criteria:
 ### Phase 2 — AI diagnostics core (US-03, US-04, US-05)
 
 Tasks:
-- `DiagnosticDriver` interface + `MySqlDiagnosticDriver` and
+- ✅ `DiagnosticDriver` interface + `MySqlDiagnosticDriver` and
   `PostgresDiagnosticDriver`.
-- Fixed sandboxed tools bound to the active project's connection:
-  `ListTablesTool`, `GetTableSchemaTool`, `GetSlowQueriesTool`,
-  `CheckConnectionPoolTool`, `AnalyzeTableBloatTool`.
-- System prompt: list-first discovery; `GetTableSchemaTool` only for known
-  tables; hard cap of 2–3 schema lookups per prompt context.
-- Chat Livewire component: persist user message, run Prism `->asStream()` tool
-  loop, stream tokens via `$this->stream()`, persist assistant message/tool
-  results per `ChatSession`.
-- Read-only tools execute automatically on LLM invocation; results feed back
-  into the Prism context.
+- ✅ Fixed sandboxed tools bound to the active project's connection:
+  `list_tables`, `get_table_schema`, `get_slow_queries`,
+  `check_connection_pool`, `analyze_table_bloat` (`DiagnosticTools`).
+- ✅ System prompt: list-first discovery; schema lookups capped at 2–3 per context.
+- ✅ Chat Livewire component: persist user/assistant messages, run Prism
+  `->asStream()` tool loop, stream tokens via `$this->stream()`.
+- ✅ Read-only tools execute automatically on LLM invocation.
 
 Exit criteria:
 - Plain-language questions return streamed analyses backed by tool calls.
@@ -651,9 +648,9 @@ Exit criteria:
 | --- | --- | --- | --- |
 | US-01 Configure Database Credentials | 1 | ✅ Done | `Project` ✅, `TargetConnectionManager` ✅, `PermissionChecker` ✅, `CreateProjectModal` ✅, AI settings UI ✅ |
 | US-02 View Project Workspace | 1 | ✅ Done | Sidebar switcher ✅, `/switch-project` route ✅, `HealthDashboard` ✅ |
-| US-03 Troubleshoot Database via Chat | 2 | ⏳ Not started | Chat Livewire component, Prism `->asStream()` |
-| US-04 Inspect Table Schemas | 2 | ⏳ Not started | `ListTablesTool`, `GetTableSchemaTool`, system prompt caps |
-| US-05 Execute Authorized AI Diagnostics | 2 | ⏳ Not started | `DiagnosticDriver`, read-only tools |
+| US-03 Troubleshoot Database via Chat | 2 | ✅ Done | `ChatWindow` ✅, Prism `->asStream()` ✅ |
+| US-04 Inspect Table Schemas | 2 | ✅ Done | `DiagnosticTools` ✅, system prompt caps ✅ |
+| US-05 Execute Authorized AI Diagnostics | 2 | ✅ Done | `DiagnosticDriver` ✅, read-only tools ✅ |
 | US-06 Authorize Modifying Actions | 3 | ⏳ Not started | `PendingAction`, confirmation modal, `ActionLog` |
 | US-07 Receive Performance Alerts | 1/4 | 🔄 Partial | Dashboard breach display ✅; `CollectMetrics` job ⏳, NativePHP Notification ⏳ |
 | US-08 Clear Old Telemetry Logs | 5 | ⏳ Not started | `Prunable` `MetricSample`, `model:prune` |
