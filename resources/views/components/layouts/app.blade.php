@@ -14,6 +14,20 @@
                 Dashboard
             </flux:sidebar.item>
         </flux:sidebar.nav>
+
+        <flux:sidebar.nav class="mt-6">
+            <div class="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Workspaces
+            </div>
+            @foreach (\App\Models\Project::all() as $p)
+                <flux:sidebar.item
+                    :href="route('switch-project', $p)"
+                    :current="session('active_project_id') === $p->id"
+                    icon="circle-stack">
+                    {{ $p->name }}
+                </flux:sidebar.item>
+            @endforeach
+        </flux:sidebar.nav>
     </flux:sidebar>
 
     <flux:main>
