@@ -510,11 +510,15 @@ Tasks:
   block save on failure.
 - Sidebar workspace switcher; scope all sessions/metrics/tools to the active
   project.
+- Health Dashboard (`HealthDashboard` Livewire + Flux UI): landing screen showing
+  workspace health, latest metric trends with inline SVG sparklines, active threshold
+  breaches, pending approvals, and recent audit logs (see `dashboard_implementation.md`).
 
 Exit criteria:
 - Valid MySQL and PostgreSQL profiles save after passing the permission check.
 - Invalid profiles are rejected with an actionable message (no broken save).
 - Switching workspaces isolates chat/metrics/tools.
+- `/dashboard` renders scoped telemetry, trends, pending actions, and audit logs.
 
 ### Phase 2 — AI diagnostics core (US-03, US-04, US-05)
 
@@ -616,15 +620,15 @@ Exit criteria:
 | User Story | Phase | Primary artifacts |
 | --- | --- | --- |
 | US-01 Configure Database Credentials | 1 | `Project`, `TargetConnectionManager`, `PermissionChecker`, onboarding wizard |
-| US-02 View Project Workspace | 1 | Sidebar switcher, project scoping |
+| US-02 View Project Workspace | 1 | Sidebar switcher, project scoping, Health Dashboard |
 | US-03 Troubleshoot Database via Chat | 2 | Chat Livewire component, Prism `->asStream()` |
 | US-04 Inspect Table Schemas | 2 | `ListTablesTool`, `GetTableSchemaTool`, system prompt caps |
 | US-05 Execute Authorized AI Diagnostics | 2 | `DiagnosticDriver`, read-only tools |
 | US-06 Authorize Modifying Actions | 3 | `PendingAction`, confirmation modal, `ActionLog` |
-| US-07 Receive Performance Alerts | 4 | `CollectMetrics`, NativePHP Notification, QueueWorker |
+| US-07 Receive Performance Alerts | 1/4 | Health Dashboard (context & breach display), `CollectMetrics`, NativePHP Notification |
 | US-08 Clear Old Telemetry Logs | 5 | `Prunable` `MetricSample`, `model:prune` |
 | US-09 Configure AI Provider | 0/1 | Prism config, encrypted key, provider settings |
-| US-10 Configure Alert Thresholds | 4 | `Threshold` (per-project), settings UI |
+| US-10 Configure Alert Thresholds | 1/4 | Health Dashboard (context display), `Threshold` (per-project), settings UI |
 
 ---
 

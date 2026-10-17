@@ -637,8 +637,7 @@ scale so the dashed line is always inside the viewBox.
   Use `php artisan migrate:fresh --seed` when working on this screen.
 - **`/settings/thresholds` link.** The target page belongs to Phase 4 (US-10); until it exists
   the "Edit" button leads to a 404.
-- **Plan placement.** `implementation_plan.md` lists no dashboard task even though the HLD names
-  the screen. It fits at the end of Phase 1 (models available) or the start of Phase 4.
+- **Plan placement.** Integrated into Phase 1 (§4.1) of `implementation_plan.md` as the read-only workspace health landing screen.
 
 ## 8. Definition of done
 
