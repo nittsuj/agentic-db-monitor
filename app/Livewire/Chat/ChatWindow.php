@@ -13,7 +13,7 @@ use App\Services\Database\DiagnosticTools;
 use App\Services\Database\TargetConnectionManager;
 use Illuminate\View\View;
 use Livewire\Component;
-use Prism\Prism\Prism;
+use Prism\Prism\Facades\Prism;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
 
 class ChatWindow extends Component
