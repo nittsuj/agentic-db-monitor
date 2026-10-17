@@ -37,6 +37,32 @@ class AiSettingsFormTest extends TestCase
         $this->assertNotSame('super-secret-key', $raw);
     }
 
+    public function test_saves_openai_settings_with_api_key(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'openai')
+            ->set('model', 'gpt-4.1-mini')
+            ->set('base_url', 'https://api.openai.com/v1')
+            ->set('api_key_input', 'openai-secret-key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $setting = AiSetting::where('is_active', true)->first();
+
+        $this->assertSame('openai', $setting->provider);
+        $this->assertSame('openai-secret-key', $setting->api_key);
+    }
+
+    public function test_requires_api_key_for_new_openai_settings(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'openai')
+            ->set('model', 'gpt-4.1-mini')
+            ->set('base_url', 'https://api.openai.com/v1')
+            ->call('save')
+            ->assertHasErrors(['api_key_input']);
+    }
+
     public function test_empty_key_preserves_existing(): void
     {
         $existing = AiSetting::factory()->create(['api_key' => 'original-key']);
@@ -49,13 +75,13 @@ class AiSettingsFormTest extends TestCase
         $this->assertSame('original-key', $existing->fresh()->api_key);
     }
 
-    public function test_rejects_disallowed_model(): void
+    public function test_rejects_unknown_provider(): void
     {
         Livewire::test(AiSettingsForm::class)
-            ->set('model', 'gpt-4')
+            ->set('provider', 'unknown')
             ->set('api_key_input', 'some-key')
             ->call('save')
-            ->assertHasErrors(['model']);
+            ->assertHasErrors(['provider']);
     }
 
     public function test_rejects_invalid_base_url(): void

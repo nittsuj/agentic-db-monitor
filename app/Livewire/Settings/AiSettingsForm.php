@@ -21,8 +21,6 @@ class AiSettingsForm extends Component
 
     public bool $has_existing_key = false;
 
-    private const ALLOWED_MODELS = ['llama3.1', 'llama3.2', 'qwen2.5'];
-
     public function mount(): void
     {
         $setting = AiSetting::where('is_active', true)->first();
@@ -42,11 +40,26 @@ class AiSettingsForm extends Component
     protected function rules(): array
     {
         return [
-            'provider' => ['required', 'in:ollama'],
-            'model' => ['required', 'in:'.implode(',', self::ALLOWED_MODELS)],
+            'provider' => ['required', 'in:ollama,openai'],
+            'model' => ['required', 'string', 'max:100'],
             'base_url' => ['required', 'url'],
-            'api_key_input' => [$this->has_existing_key ? 'nullable' : 'required', 'string', 'min:4'],
+            'api_key_input' => [
+                $this->provider === 'openai' && ! $this->has_existing_key ? 'required' : 'nullable',
+                'string',
+                'min:4',
+            ],
         ];
+    }
+
+    public function updatedProvider(string $provider): void
+    {
+        if ($provider === 'openai' && $this->base_url === 'https://ollama.com') {
+            $this->base_url = 'https://api.openai.com/v1';
+            $this->model = 'gpt-4.1-mini';
+        } elseif ($provider === 'ollama' && $this->base_url === 'https://api.openai.com/v1') {
+            $this->base_url = 'https://ollama.com';
+            $this->model = 'llama3.1';
+        }
     }
 
     public function save(): void
