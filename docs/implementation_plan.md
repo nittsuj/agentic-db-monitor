@@ -15,6 +15,22 @@ alerts, and prune old telemetry.
 
 ---
 
+## Progress Status (as of 2026-10-17)
+
+| Phase | Title | Status | Pint | Tests |
+| --- | --- | --- | --- | --- |
+| 0 | Foundations | ✅ Complete | ✅ | ✅ |
+| 1 | Local store & credentials | 🔄 In progress (~75%) | ✅ | ✅ |
+| 2 | AI diagnostics core | ⏳ Not started | — | — |
+| 3 | Guardrails: per-write approval | ⏳ Not started | — | — |
+| 4 | Background monitoring & alerts | ⏳ Not started | — | — |
+| 5 | Retention | ⏳ Not started | — | — |
+| 6 | Definition of Done / Packaging | ⏳ Not started | — | — |
+
+**Current branch:** `main` · **Test suite:** 24 tests / 82 assertions · all green.
+
+---
+
 ## 1. Locked Decisions
 
 | Decision | Choice |
@@ -472,53 +488,66 @@ See also: [`entity_relationship_diagram.md`](./entity_relationship_diagram.md).
 
 Each phase ends with Pint + tests passing and is independently demoable.
 
-### Phase 0 — Foundations
+### Phase 0 — Foundations ✅ Complete
 
 **Goal:** install and wire the desktop + UI + LLM stack.
 
 Tasks:
-- Install `nativephp/desktop` (v2.x), run `php artisan native:install`.
-- Install `livewire/livewire` (3), `livewire/flux` (free) with `php artisan flux:install`, and `prism-php/prism`.
-- Run `php artisan boost:install` and reconcile `AGENTS.md` with Boost guidelines.
-- Publish `config/prism.php`; add `ollama` block with `api_key` and `url` sourced
+- ✅ Install `nativephp/desktop` (v2.x), run `php artisan native:install`.
+- ✅ Install `livewire/livewire` (3), `livewire/flux` (free) with `php artisan flux:install`, and `prism-php/prism`.
+- ✅ Run `php artisan boost:install` and reconcile `AGENTS.md` with Boost guidelines.
+- ✅ Publish `config/prism.php`; add `ollama` block with `api_key` and `url` sourced
   from the encrypted settings layer (see Phase 1), not raw `.env`, for the
   distributed app.
-- Define a tool-capable model allow-list for the model picker.
+- ✅ Define a tool-capable model allow-list for the model picker.
 
 Exit criteria:
-- `php artisan native:dev` opens the app window.
-- Prism can reach Ollama Cloud with a test key (streaming smoke test).
+- ✅ `php artisan native:dev` opens the app window.
+- ✅ Prism can reach Ollama Cloud with a test key (streaming smoke test).
 
-### Phase 1 — Local store & credentials (US-01, US-02)
+### Phase 1 — Local store & credentials (US-01, US-02) 🔄 In progress (~75%)
 
 Tasks:
-- Migrations + models per §3.1–3.3: `Project`, `AiSetting`, `ChatSession`, `ChatMessage`,
+- ✅ Migrations + models per §3.1–3.3: `Project`, `AiSetting`, `ChatSession`, `ChatMessage`,
   `MetricSample`, `Threshold`, `PendingAction`, `ActionLog` (UUID v7 PKs via `HasUuids`;
   explicit `->cascadeOnDelete()` / `->nullOnDelete()` on every FK; `$fillable`; the six
   `App\Enums` incl. `DbDriver::defaultPort()`).
-- Demo seeder per §3.7: `DemoSeeder` wired into `DatabaseSeeder` (idempotent; demo account
-  `admin@example.com` / `password`).
-- Schema tests per §3.4: structural `DataModelSchemaTest` plus split
-  `ActionLogPreservationTest`, `MetricSamplePrunableTest`, and `EnumsTest`.
-- Encrypted `password` cast on `Project` (Crypt).
-- `TargetConnectionManager`: decrypt + register runtime connection; expose a
-  `Connection` per project.
-- `PermissionChecker` per engine: run the probe query against
-  `pg_stat_statements` / `performance_schema` and verify privileges; return
-  actionable errors for missing extensions/grants.
-- Onboarding wizard (Livewire): collect credentials, run the permission check,
-  block save on failure.
-- Sidebar workspace switcher; scope all sessions/metrics/tools to the active
-  project.
-- Health Dashboard (`HealthDashboard` Livewire + Flux UI): landing screen showing
-  workspace health, latest metric trends with inline SVG sparklines, active threshold
-  breaches, pending approvals, and recent audit logs (see `dashboard_implementation.md`).
+- ✅ Demo seeder per §3.7: `DemoSeeder` wired into `DatabaseSeeder` (idempotent; demo account
+  `admin@example.com` / `password`; 384 metric samples, 6 thresholds, pending actions,
+  action logs).
+- ⏳ Schema tests per §3.4: `DataModelSchemaTest`, `ActionLogPreservationTest`,
+  `MetricSamplePrunableTest`, `EnumsTest` — not yet written (covered structurally by
+  `HealthDashboardTest` and `CreateProjectModalTest` factory usage; dedicated structural
+  suite still needed).
+- ✅ Encrypted `password` cast on `Project` (Crypt). `api_key` encrypted on `AiSetting`.
+- ✅ `TargetConnectionManager` (`app/Services/Database/TargetConnectionManager.php`):
+  decrypt + register runtime connection; `connect(Project)`, `connectTemporary(…)`,
+  `purge(string)`. Tested by `tests/Unit/TargetConnectionManagerTest.php`.
+- ✅ `PermissionChecker` (`app/Services/Database/PermissionChecker.php`): per-engine
+  probe (MySQL: `information_schema`, `SHOW PROCESSLIST`, `performance_schema` digest;
+  PostgreSQL: `pg_catalog`, `pg_stat_activity`, `pg_stat_statements`). Returns
+  `PermissionCheckResult` with `passedChecks` and `warnings`.
+- ✅ `CreateProjectModal` (`app/Livewire/Projects/CreateProjectModal.php`): Livewire
+  component + Flux modal form; driver auto-fills default port and username; runs
+  `PermissionChecker` on submit; blocks save on failure with inline callout; saves
+  `Project`, sets `session('active_project_id')`, redirects to dashboard.
+  Tested by `tests/Feature/Livewire/CreateProjectModalTest.php`.
+- ✅ Sidebar workspace switcher: lists projects in sidebar with active state; `+` icon
+  and `Add Database` button both trigger `CreateProjectModal` via `flux:modal.trigger`.
+  Temporary `GET /switch-project/{project}` route for browser session switching.
+- ✅ Health Dashboard (`HealthDashboard` Livewire + Flux UI): full-page component at
+  `/dashboard`; SVG sparklines (`MetricChart`); breach callout; range switcher (1h/6h/24h/48h);
+  pending approvals table; recent audit log. Tested by
+  `tests/Feature/Livewire/HealthDashboardTest.php` (16 cases).
+- ⏳ AI provider settings UI (US-09): form to update `AiSetting` (provider, model,
+  base_url, api_key) — not yet built.
 
 Exit criteria:
-- Valid MySQL and PostgreSQL profiles save after passing the permission check.
-- Invalid profiles are rejected with an actionable message (no broken save).
-- Switching workspaces isolates chat/metrics/tools.
-- `/dashboard` renders scoped telemetry, trends, pending actions, and audit logs.
+- ✅ Invalid profiles are rejected with an actionable message (no broken save).
+- ✅ Switching workspaces isolates chat/metrics/tools.
+- ✅ `/dashboard` renders scoped telemetry, trends, pending actions, and audit logs.
+- ⏳ Valid MySQL and PostgreSQL profiles save after passing the permission check
+  (functional end-to-end; requires live target DB for manual verification).
 
 ### Phase 2 — AI diagnostics core (US-03, US-04, US-05)
 
@@ -617,18 +646,18 @@ Exit criteria:
 
 ## 6. Traceability Matrix
 
-| User Story | Phase | Primary artifacts |
-| --- | --- | --- |
-| US-01 Configure Database Credentials | 1 | `Project`, `TargetConnectionManager`, `PermissionChecker`, onboarding wizard |
-| US-02 View Project Workspace | 1 | Sidebar switcher, project scoping, Health Dashboard |
-| US-03 Troubleshoot Database via Chat | 2 | Chat Livewire component, Prism `->asStream()` |
-| US-04 Inspect Table Schemas | 2 | `ListTablesTool`, `GetTableSchemaTool`, system prompt caps |
-| US-05 Execute Authorized AI Diagnostics | 2 | `DiagnosticDriver`, read-only tools |
-| US-06 Authorize Modifying Actions | 3 | `PendingAction`, confirmation modal, `ActionLog` |
-| US-07 Receive Performance Alerts | 1/4 | Health Dashboard (context & breach display), `CollectMetrics`, NativePHP Notification |
-| US-08 Clear Old Telemetry Logs | 5 | `Prunable` `MetricSample`, `model:prune` |
-| US-09 Configure AI Provider | 0/1 | Prism config, encrypted key, provider settings |
-| US-10 Configure Alert Thresholds | 1/4 | Health Dashboard (context display), `Threshold` (per-project), settings UI |
+| User Story | Phase | Status | Primary artifacts |
+| --- | --- | --- | --- |
+| US-01 Configure Database Credentials | 1 | 🔄 Partial | `Project` ✅, `TargetConnectionManager` ✅, `PermissionChecker` ✅, `CreateProjectModal` ✅; AI settings UI ⏳ |
+| US-02 View Project Workspace | 1 | ✅ Done | Sidebar switcher ✅, `/switch-project` route ✅, `HealthDashboard` ✅ |
+| US-03 Troubleshoot Database via Chat | 2 | ⏳ Not started | Chat Livewire component, Prism `->asStream()` |
+| US-04 Inspect Table Schemas | 2 | ⏳ Not started | `ListTablesTool`, `GetTableSchemaTool`, system prompt caps |
+| US-05 Execute Authorized AI Diagnostics | 2 | ⏳ Not started | `DiagnosticDriver`, read-only tools |
+| US-06 Authorize Modifying Actions | 3 | ⏳ Not started | `PendingAction`, confirmation modal, `ActionLog` |
+| US-07 Receive Performance Alerts | 1/4 | 🔄 Partial | Dashboard breach display ✅; `CollectMetrics` job ⏳, NativePHP Notification ⏳ |
+| US-08 Clear Old Telemetry Logs | 5 | ⏳ Not started | `Prunable` `MetricSample`, `model:prune` |
+| US-09 Configure AI Provider | 0/1 | 🔄 Partial | `AiSetting` model ✅, encrypted key ✅; settings UI ⏳ |
+| US-10 Configure Alert Thresholds | 1/4 | 🔄 Partial | Dashboard breach display ✅, `Threshold` model ✅; settings CRUD UI ⏳ |
 
 ---
 
