@@ -14,6 +14,7 @@ use App\Models\Project;
 use App\Services\Database\DiagnosticTools;
 use App\Services\Database\StatementClassifier;
 use App\Services\Database\TargetConnectionManager;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\View\View;
 use Livewire\Component;
 use Prism\Prism\Facades\Prism;
@@ -129,7 +130,15 @@ class ChatWindow extends Component
         $provider = 'ollama';
         $model = $aiSetting?->model ?? 'llama3.1';
         $baseUrl = $aiSetting?->base_url ?? 'https://ollama.com';
-        $apiKey = $aiSetting?->api_key ?? '';
+
+        $apiKey = '';
+        if ($aiSetting !== null) {
+            try {
+                $apiKey = $aiSetting->api_key ?? '';
+            } catch (DecryptException $e) {
+                $apiKey = '';
+            }
+        }
 
         $systemPrompt = 'You are a database diagnostics assistant. Always start by listing tables (list_tables) before inspecting schemas. Only call get_table_schema for tables returned by list_tables, and limit schema lookups to 2-3 per request. Read-only tools execute automatically. Never generate or execute raw SQL; use only the provided tools.';
 

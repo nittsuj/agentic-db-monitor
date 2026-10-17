@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Settings;
 
 use App\Models\AiSetting;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\View\View;
 use Livewire\Component;
 
@@ -30,7 +31,11 @@ class AiSettingsForm extends Component
             $this->provider = $setting->provider;
             $this->model = $setting->model ?? 'llama3.1';
             $this->base_url = $setting->base_url ?? 'https://ollama.com';
-            $this->has_existing_key = $setting->api_key !== null && $setting->api_key !== '';
+            try {
+                $this->has_existing_key = $setting->api_key !== null && $setting->api_key !== '';
+            } catch (DecryptException $e) {
+                $this->has_existing_key = false;
+            }
         }
     }
 
