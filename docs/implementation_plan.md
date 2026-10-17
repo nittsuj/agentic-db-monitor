@@ -20,14 +20,14 @@ alerts, and prune old telemetry.
 | Phase | Title | Status | Pint | Tests |
 | --- | --- | --- | --- | --- |
 | 0 | Foundations | ✅ Complete | ✅ | ✅ |
-| 1 | Local store & credentials | 🔄 In progress (~75%) | ✅ | ✅ |
+| 1 | Local store & credentials | ✅ Complete | ✅ | ✅ |
 | 2 | AI diagnostics core | ⏳ Not started | — | — |
 | 3 | Guardrails: per-write approval | ⏳ Not started | — | — |
 | 4 | Background monitoring & alerts | ⏳ Not started | — | — |
 | 5 | Retention | ⏳ Not started | — | — |
 | 6 | Definition of Done / Packaging | ⏳ Not started | — | — |
 
-**Current branch:** `main` · **Test suite:** 24 tests / 82 assertions · all green.
+**Current branch:** `main` · **Test suite:** 58 tests / 147 assertions · all green.
 
 ---
 
@@ -515,10 +515,8 @@ Tasks:
 - ✅ Demo seeder per §3.7: `DemoSeeder` wired into `DatabaseSeeder` (idempotent; demo account
   `admin@example.com` / `password`; 384 metric samples, 6 thresholds, pending actions,
   action logs).
-- ⏳ Schema tests per §3.4: `DataModelSchemaTest`, `ActionLogPreservationTest`,
-  `MetricSamplePrunableTest`, `EnumsTest` — not yet written (covered structurally by
-  `HealthDashboardTest` and `CreateProjectModalTest` factory usage; dedicated structural
-  suite still needed).
+- ✅ Schema tests per §3.4: `DataModelSchemaTest`, `ActionLogPreservationTest`,
+  `MetricSamplePrunableTest`, `EnumsTest` — written and passing.
 - ✅ Encrypted `password` cast on `Project` (Crypt). `api_key` encrypted on `AiSetting`.
 - ✅ `TargetConnectionManager` (`app/Services/Database/TargetConnectionManager.php`):
   decrypt + register runtime connection; `connect(Project)`, `connectTemporary(…)`,
@@ -539,15 +537,17 @@ Tasks:
   `/dashboard`; SVG sparklines (`MetricChart`); breach callout; range switcher (1h/6h/24h/48h);
   pending approvals table; recent audit log. Tested by
   `tests/Feature/Livewire/HealthDashboardTest.php` (16 cases).
-- ⏳ AI provider settings UI (US-09): form to update `AiSetting` (provider, model,
-  base_url, api_key) — not yet built.
+- ✅ Threshold settings UI (US-10): `ThresholdManager` Livewire component + view +
+  `/thresholds` route; per-project scoped CRUD, enable/disable toggle.
+- ✅ AI provider settings UI (US-09): `AiSettingsForm` Livewire component + view +
+  `/settings/ai` route; encrypted key handling, allow-list validation.
 
 Exit criteria:
 - ✅ Invalid profiles are rejected with an actionable message (no broken save).
 - ✅ Switching workspaces isolates chat/metrics/tools.
 - ✅ `/dashboard` renders scoped telemetry, trends, pending actions, and audit logs.
 - ⏳ Valid MySQL and PostgreSQL profiles save after passing the permission check
-  (functional end-to-end; requires live target DB for manual verification).
+  (functional end-to-end; requires live target DB for manual verification — pending).
 
 ### Phase 2 — AI diagnostics core (US-03, US-04, US-05)
 
@@ -648,7 +648,7 @@ Exit criteria:
 
 | User Story | Phase | Status | Primary artifacts |
 | --- | --- | --- | --- |
-| US-01 Configure Database Credentials | 1 | 🔄 Partial | `Project` ✅, `TargetConnectionManager` ✅, `PermissionChecker` ✅, `CreateProjectModal` ✅; AI settings UI ⏳ |
+| US-01 Configure Database Credentials | 1 | ✅ Done | `Project` ✅, `TargetConnectionManager` ✅, `PermissionChecker` ✅, `CreateProjectModal` ✅, AI settings UI ✅ |
 | US-02 View Project Workspace | 1 | ✅ Done | Sidebar switcher ✅, `/switch-project` route ✅, `HealthDashboard` ✅ |
 | US-03 Troubleshoot Database via Chat | 2 | ⏳ Not started | Chat Livewire component, Prism `->asStream()` |
 | US-04 Inspect Table Schemas | 2 | ⏳ Not started | `ListTablesTool`, `GetTableSchemaTool`, system prompt caps |
@@ -656,8 +656,8 @@ Exit criteria:
 | US-06 Authorize Modifying Actions | 3 | ⏳ Not started | `PendingAction`, confirmation modal, `ActionLog` |
 | US-07 Receive Performance Alerts | 1/4 | 🔄 Partial | Dashboard breach display ✅; `CollectMetrics` job ⏳, NativePHP Notification ⏳ |
 | US-08 Clear Old Telemetry Logs | 5 | ⏳ Not started | `Prunable` `MetricSample`, `model:prune` |
-| US-09 Configure AI Provider | 0/1 | 🔄 Partial | `AiSetting` model ✅, encrypted key ✅; settings UI ⏳ |
-| US-10 Configure Alert Thresholds | 1/4 | 🔄 Partial | Dashboard breach display ✅, `Threshold` model ✅; settings CRUD UI ⏳ |
+| US-09 Configure AI Provider | 0/1 | ✅ Done | `AiSetting` model ✅, encrypted key ✅, settings UI ✅ |
+| US-10 Configure Alert Thresholds | 1/4 | 🔄 Partial | Dashboard breach display ✅, `Threshold` model ✅, settings CRUD UI ✅; `CollectMetrics` ⏳ |
 
 ---
 
