@@ -22,12 +22,12 @@ alerts, and prune old telemetry.
 | 0 | Foundations | ✅ Complete | ✅ | ✅ |
 | 1 | Local store & credentials | ✅ Complete | ✅ | ✅ |
 | 2 | AI diagnostics core | ✅ Complete | ✅ | ✅ |
-| 3 | Guardrails: per-write approval | ⏳ Not started | — | — |
+| 3 | Guardrails: per-write approval | ✅ Complete | ✅ | ✅ |
 | 4 | Background monitoring & alerts | ⏳ Not started | — | — |
 | 5 | Retention | ⏳ Not started | — | — |
 | 6 | Definition of Done / Packaging | ⏳ Not started | — | — |
 
-**Current branch:** `main` · **Test suite:** 62 tests / 158 assertions · all green.
+**Current branch:** `main` · **Test suite:** 68 tests / 173 assertions · all green.
 
 ---
 
@@ -651,7 +651,7 @@ Exit criteria:
 | US-03 Troubleshoot Database via Chat | 2 | ✅ Done | `ChatWindow` ✅, Prism `->asStream()` ✅ |
 | US-04 Inspect Table Schemas | 2 | ✅ Done | `DiagnosticTools` ✅, system prompt caps ✅ |
 | US-05 Execute Authorized AI Diagnostics | 2 | ✅ Done | `DiagnosticDriver` ✅, read-only tools ✅ |
-| US-06 Authorize Modifying Actions | 3 | ⏳ Not started | `PendingAction`, confirmation modal, `ActionLog` |
+| US-06 Authorize Modifying Actions | 3 | ✅ Done | `PendingAction`, `ApprovalQueue`, `ActionLog`, `StatementClassifier` |
 | US-07 Receive Performance Alerts | 1/4 | 🔄 Partial | Dashboard breach display ✅; `CollectMetrics` job ⏳, NativePHP Notification ⏳ |
 | US-08 Clear Old Telemetry Logs | 5 | ⏳ Not started | `Prunable` `MetricSample`, `model:prune` |
 | US-09 Configure AI Provider | 0/1 | ✅ Done | `AiSetting` model ✅, encrypted key ✅, settings UI ✅ |
