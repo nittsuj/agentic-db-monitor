@@ -23,7 +23,7 @@ class ChatWindowTest extends TestCase
         $project = Project::factory()->create();
         session(['active_project_id' => $project->id]);
 
-        Prism::fake([
+        $fake = Prism::fake([
             TextResponseFake::make()->withText('Hello from the assistant.'),
         ]);
 
@@ -31,6 +31,11 @@ class ChatWindowTest extends TestCase
             ->set('input', 'Hi')
             ->call('send')
             ->assertHasNoErrors();
+
+        $fake->assertCallCount(1);
+        $fake->assertRequest(function ($recorded) {
+            $this->assertNotEmpty($recorded[0]->tools());
+        });
 
         $session = ChatSession::where('project_id', $project->id)->first();
         $this->assertNotNull($session);
