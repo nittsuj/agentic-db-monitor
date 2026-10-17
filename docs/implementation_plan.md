@@ -21,7 +21,7 @@ alerts, and prune old telemetry.
 | --- | --- | --- | --- | --- |
 | 0 | Foundations | ✅ Complete | ✅ | ✅ |
 | 1 | Local store & credentials | ✅ Complete | ✅ | ✅ |
-| 2 | AI diagnostics core | ⏳ Not started | — | — |
+| 2 | AI diagnostics core | 🔄 In progress | — | — |
 | 3 | Guardrails: per-write approval | ⏳ Not started | — | — |
 | 4 | Background monitoring & alerts | ⏳ Not started | — | — |
 | 5 | Retention | ⏳ Not started | — | — |
