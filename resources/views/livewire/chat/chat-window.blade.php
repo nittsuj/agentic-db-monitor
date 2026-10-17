@@ -9,7 +9,7 @@
         @endforeach
         @if ($assistantContent !== '')
             <div class="text-left">
-                <div class="inline-block max-w-[80%] rounded-lg px-3 py-2 bg-zinc-100 dark:bg-zinc-800">
+                <div wire:stream="assistantContent" class="inline-block max-w-[80%] rounded-lg px-3 py-2 bg-zinc-100 dark:bg-zinc-800">
                     {{ $assistantContent }}
                 </div>
             </div>
