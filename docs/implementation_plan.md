@@ -546,8 +546,9 @@ Exit criteria:
 - ✅ Invalid profiles are rejected with an actionable message (no broken save).
 - ✅ Switching workspaces isolates chat/metrics/tools.
 - ✅ `/dashboard` renders scoped telemetry, trends, pending actions, and audit logs.
-- ⏳ Valid MySQL and PostgreSQL profiles save after passing the permission check
-  (functional end-to-end; requires live target DB for manual verification — pending).
+- ✅ Valid MySQL and PostgreSQL profiles save after passing the permission check
+  (verified end-to-end against live MySQL 8 and Postgres 16: PermissionChecker passes
+  for both; TargetConnectionManager connects to both seeded profiles).
 
 ### Phase 2 — AI diagnostics core (US-03, US-04, US-05)
 
