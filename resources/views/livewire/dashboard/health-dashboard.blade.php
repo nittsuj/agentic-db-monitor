@@ -1,9 +1,16 @@
 <div class="space-y-6" wire:poll.60s>
     @if ($this->project === null)
-        <flux:card class="flex flex-col items-center gap-3 py-16 text-center">
+        <flux:card class="flex flex-col items-center gap-4 py-16 text-center">
             <flux:icon.circle-stack class="size-10 text-zinc-400" />
-            <flux:heading size="lg">No workspace selected</flux:heading>
-            <flux:text>Add a database profile or pick one from the sidebar.</flux:text>
+            <div class="space-y-1">
+                <flux:heading size="lg">No workspace selected</flux:heading>
+                <flux:text>Add a database profile or pick one from the sidebar.</flux:text>
+            </div>
+            <flux:modal.trigger name="create-project-modal">
+                <flux:button variant="primary" icon="plus">
+                    Add Database Connection
+                </flux:button>
+            </flux:modal.trigger>
         </flux:card>
     @else
         @php

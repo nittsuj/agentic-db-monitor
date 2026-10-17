@@ -16,23 +16,43 @@
         </flux:sidebar.nav>
 
         <flux:sidebar.nav class="mt-6">
-            <div class="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Workspaces
+            <div class="flex items-center justify-between px-3 py-1">
+                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Workspaces
+                </span>
+                <flux:modal.trigger name="create-project-modal">
+                    <flux:button size="xs" variant="ghost" icon="plus" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" title="Add Database Profile" />
+                </flux:modal.trigger>
             </div>
-            @foreach (\App\Models\Project::all() as $p)
+
+            @forelse (\App\Models\Project::orderBy('name')->get() as $p)
                 <flux:sidebar.item
                     :href="route('switch-project', $p)"
                     :current="session('active_project_id') === $p->id"
                     icon="circle-stack">
                     {{ $p->name }}
                 </flux:sidebar.item>
-            @endforeach
+            @empty
+                <div class="px-3 py-2 text-xs text-zinc-400">
+                    No databases connected
+                </div>
+            @endforelse
+
+            <div class="px-2 pt-2">
+                <flux:modal.trigger name="create-project-modal">
+                    <flux:button size="sm" variant="outline" class="w-full justify-start" icon="plus">
+                        Add Database
+                    </flux:button>
+                </flux:modal.trigger>
+            </div>
         </flux:sidebar.nav>
     </flux:sidebar>
 
     <flux:main>
         {{ $slot }}
     </flux:main>
+
+    <livewire:projects.create-project-modal />
 
     @fluxScripts
 </body>
