@@ -37,3 +37,16 @@ Thumbs.db
 
 # Local Claude Code settings (per machine)
 /.claude/settings.local.json
+
+# Local docs and AI-agent tooling (kept on disk, not in the repo)
+/.claude
+/.agents
+/.serena
+/.mcp.json
+/boost.json
+/opencode.json
+/CLAUDE.md
+/AGENTS.md
+/docs
+/PRD*.md
+/Dashboard-Utama-DB-Monitor
