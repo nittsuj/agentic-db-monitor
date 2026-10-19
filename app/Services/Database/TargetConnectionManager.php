@@ -38,6 +38,9 @@ class TargetConnectionManager
             username: $project->username,
             password: $project->password,
             options: $project->options ?? [],
+            // Chat and the collector run inside a web/scheduler request, so an
+            // unreachable target must fail fast rather than hold the worker.
+            timeout: 5,
         );
 
         Config::set("database.connections.{$name}", $config);
@@ -114,6 +117,13 @@ class TargetConnectionManager
         array $options = [],
         int $timeout = 10,
     ): array {
+        // pdo_pgsql ignores PDO::ATTR_TIMEOUT and Laravel's Postgres DSN has no
+        // connect_timeout key, so an unreachable host would hold the request (and a
+        // server worker) for the OS TCP timeout. libpq reads this variable instead.
+        if ($driver === DbDriver::PgSql) {
+            putenv('PGCONNECT_TIMEOUT='.max(1, $timeout));
+        }
+
         $pdoOptions = [
             PDO::ATTR_TIMEOUT => $timeout,
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

@@ -44,6 +44,6 @@ class DockerEntrypointTest extends TestCase
         $this->assertStringContainsString('php artisan migrate --force', $this->script);
         $this->assertStringContainsString('php artisan db:seed --force', $this->script);
         $this->assertStringContainsString('php artisan schedule:work &', $this->script);
-        $this->assertStringContainsString('exec php artisan serve --host=0.0.0.0 --port=8000', $this->script);
+        $this->assertStringContainsString('exec php artisan serve --host=0.0.0.0 --port=8000 --no-reload', $this->script);
     }
 }

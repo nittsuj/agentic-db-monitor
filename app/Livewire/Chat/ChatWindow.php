@@ -18,6 +18,7 @@ use App\Services\Ai\ToolSupportVerifier;
 use App\Services\Database\DiagnosticTools;
 use App\Services\Database\TargetConnectionManager;
 use App\Services\Monitoring\MetricSummaryTool;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
@@ -56,9 +57,25 @@ class ChatWindow extends Component
         return Project::find($this->activeProjectId);
     }
 
+    /**
+     * Projects offered by the "choose a database first" dialog.
+     *
+     * @return Collection<int, Project>
+     */
+    #[Computed]
+    public function projects(): Collection
+    {
+        return Project::query()->orderBy('name')->get(['id', 'name', 'driver', 'database']);
+    }
+
     public function mount(): void
     {
         $this->activeProjectId = session('active_project_id');
+
+        // A project deleted in another tab leaves a stale id behind; treat it as none.
+        if ($this->activeProjectId !== null && ! Project::whereKey($this->activeProjectId)->exists()) {
+            $this->activeProjectId = null;
+        }
         $this->loadOrCreateSession();
         $this->loadMessages();
     }
@@ -97,7 +114,15 @@ class ChatWindow extends Component
     public function send(): void
     {
         $text = trim($this->input);
-        if ($text === '' || $this->activeProjectId === null || $this->chatSessionId === null) {
+
+        if ($this->activeProjectId === null || $this->chatSessionId === null) {
+            // Reopen the "choose a database first" dialog instead of failing silently.
+            $this->dispatch('choose-project');
+
+            return;
+        }
+
+        if ($text === '') {
             return;
         }
 

@@ -13,9 +13,9 @@ final class AiProviderConfig
 
     public const DEFAULT_PROVIDER = self::OPENAI_COMPATIBLE;
 
-    public const TIMEOUT_SECONDS = 60;
+    public const TIMEOUT_SECONDS = 45;
 
-    public const CONNECT_TIMEOUT_SECONDS = 10;
+    public const CONNECT_TIMEOUT_SECONDS = 5;
 
     /**
      * @var array<string, array{

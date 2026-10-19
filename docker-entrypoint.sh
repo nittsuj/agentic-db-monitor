@@ -29,4 +29,6 @@ fi
 # Metric collection, threshold alerts, approval expiry, and pruning.
 php artisan schedule:work &
 
-exec php artisan serve --host=0.0.0.0 --port=8000
+# --no-reload is required for PHP_CLI_SERVER_WORKERS; without it artisan serve
+# runs a single worker and one slow chat request blocks every other page.
+exec php artisan serve --host=0.0.0.0 --port=8000 --no-reload

@@ -62,9 +62,59 @@ class ChatWindowTest extends TestCase
         Livewire::test(ChatWindow::class)
             ->set('input', 'Hi')
             ->call('send')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertDispatched('choose-project');
 
         $this->assertSame(0, ChatMessage::count());
+    }
+
+    public function test_asks_to_choose_a_database_when_no_project_is_active(): void
+    {
+        session()->forget('active_project_id');
+        $project = Project::factory()->create(['name' => 'Gudang Data']);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSee('Pilih database dulu')
+            ->assertSee('Gudang Data')
+            ->assertSee(route('switch-project', ['project' => $project->id, 'to' => 'chat']), escape: false);
+    }
+
+    public function test_offers_to_add_a_connection_when_there_are_no_projects(): void
+    {
+        session()->forget('active_project_id');
+
+        Livewire::test(ChatWindow::class)
+            ->assertSee('Pilih database dulu')
+            ->assertSee('Tambah koneksi database');
+    }
+
+    public function test_hides_the_dialog_when_a_project_is_active(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        Livewire::test(ChatWindow::class)->assertDontSee('Pilih database dulu');
+    }
+
+    public function test_a_deleted_active_project_counts_as_none(): void
+    {
+        session(['active_project_id' => '01a1556d-0000-7000-8000-000000000000']);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSet('activeProjectId', null)
+            ->assertSee('Pilih database dulu');
+    }
+
+    public function test_switching_project_can_return_to_the_chat(): void
+    {
+        $project = Project::factory()->create();
+
+        $this->get(route('switch-project', ['project' => $project->id, 'to' => 'chat']))
+            ->assertRedirect(route('chat'));
+        $this->assertSame($project->id, session('active_project_id'));
+
+        $this->get(route('switch-project', ['project' => $project->id, 'to' => 'https://evil.example']))
+            ->assertRedirect(route('dashboard'));
     }
 
     public function test_send_includes_prior_conversation_context(): void

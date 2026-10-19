@@ -75,6 +75,8 @@ class TargetConnectionManagerTest extends TestCase
         $this->assertSame('pg_db', Config::get("database.connections.{$connName}.database"));
         $this->assertSame('pg_user', Config::get("database.connections.{$connName}.username"));
         $this->assertSame('pg_secret', Config::get("database.connections.{$connName}.password"));
+        // libpq must give up quickly on an unreachable host instead of hanging.
+        $this->assertSame('5', getenv('PGCONNECT_TIMEOUT'));
 
         $this->manager->purge($connName);
     }
