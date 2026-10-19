@@ -327,7 +327,27 @@ class ChatWindow extends Component
         }
 
         $this->assistantContent .= $delta;
-        $this->stream('assistantContent', $delta);
+
+        // wire:stream inserts content as HTML, so raw model text must never be
+        // sent as is. Send the whole reply so far as escaped, rendered Markdown
+        // and replace the previous version: formatting shows while it streams.
+        $this->stream(
+            to: 'assistantContent',
+            content: self::renderMarkdown($this->assistantContent),
+            replace: true,
+        );
+    }
+
+    /**
+     * Markdown to HTML for assistant replies: raw HTML is escaped and unsafe
+     * links are dropped, so a reply cannot inject markup or scripts.
+     */
+    public static function renderMarkdown(string $markdown): string
+    {
+        return Str::markdown($markdown, [
+            'html_input' => 'escape',
+            'allow_unsafe_links' => false,
+        ]);
     }
 
     public function render(): View

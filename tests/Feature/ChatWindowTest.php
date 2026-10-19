@@ -116,6 +116,15 @@ class ChatWindowTest extends TestCase
         $this->assertTrue($its->fresh()->is_active);
     }
 
+    public function test_streamed_markdown_is_escaped_before_it_reaches_the_page(): void
+    {
+        $html = ChatWindow::renderMarkdown('**Penting** <img src=x onerror=alert(1)> [x](javascript:alert(1))');
+
+        $this->assertStringContainsString('<strong>Penting</strong>', $html);
+        $this->assertStringNotContainsString('<img', $html);
+        $this->assertStringNotContainsString('javascript:', $html);
+    }
+
     public function test_asks_to_choose_a_database_when_no_project_is_active(): void
     {
         session()->forget('active_project_id');

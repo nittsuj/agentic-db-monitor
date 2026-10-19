@@ -61,7 +61,7 @@
                     @if ($message['role'] === 'assistant')
                         {{-- Model output is Markdown. Raw HTML in it is escaped and unsafe
                              links are dropped, so a reply cannot inject markup or scripts. --}}
-                        <div class="md">{!! \Illuminate\Support\Str::markdown($message['content'], ['html_input' => 'escape', 'allow_unsafe_links' => false]) !!}</div>
+                        <div class="md">{!! \App\Livewire\Chat\ChatWindow::renderMarkdown($message['content']) !!}</div>
                     @else
                         <span style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $message['content'] }}</span>
                     @endif
@@ -88,7 +88,7 @@
             <div class="od-row" style="justify-content:flex-start">
                 <div class="od-stack"
                      style="gap:4px;max-width:min(78%,680px);border-radius:12px;padding:10px 13px;background:var(--adbm-panel-2);color:var(--adbm-text)">
-                    <span wire:stream="assistantContent" style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $assistantContent }}</span>
+                    <div class="md" wire:stream="assistantContent">{!! \App\Livewire\Chat\ChatWindow::renderMarkdown($assistantContent) !!}</div>
                 </div>
             </div>
 
@@ -105,7 +105,7 @@
         @endif
     </div>
 
-    <form wire:submit="send" x-on:submit="pending = ($wire.input || '').trim()" class="od-row" style="gap:10px;border-top:1px solid var(--adbm-border);padding:12px 14px">
+    <form wire:submit="send" x-on:submit="pending = ($wire.input || '').trim(); $nextTick(() => { $el.querySelector('input').value = '' })" class="od-row" style="gap:10px;border-top:1px solid var(--adbm-border);padding:12px 14px">
         <input type="text" wire:model="input"
                class="input"
                placeholder="Tanya tentang database…"
