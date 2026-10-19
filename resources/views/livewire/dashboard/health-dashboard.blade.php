@@ -59,6 +59,15 @@
                     <strong>{{ $breached->count() }} metrik melewati threshold</strong>
                     <span class="muted small">{{ $breached->pluck('label')->implode(', ') }}</span>
                 </div>
+
+                @if ($this->breachQuestion !== null)
+                    <a href="{{ route('chat', ['ask' => $this->breachQuestion]) }}"
+                       class="btn sm primary"
+                       style="margin-left:auto;flex:none">
+                        <svg class="od-icon"><use href="#i-chat" /></svg>
+                        Tanya agen
+                    </a>
+                @endif
             </div>
         @endif
 

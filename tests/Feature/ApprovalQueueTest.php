@@ -39,7 +39,8 @@ class ApprovalQueueTest extends TestCase
 
         Livewire::test(ApprovalQueue::class)
             ->call('approve', $action->id)
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertDispatched('approvals-changed');
 
         $this->assertSame(ActionStatus::Executed, $action->fresh()->status);
         $this->assertDatabaseHas('action_logs', [
@@ -63,7 +64,8 @@ class ApprovalQueueTest extends TestCase
 
         Livewire::test(ApprovalQueue::class)
             ->call('deny', $action->id)
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertDispatched('approvals-changed');
 
         $this->assertSame(ActionStatus::Denied, $action->fresh()->status);
         $this->assertDatabaseHas('action_logs', [

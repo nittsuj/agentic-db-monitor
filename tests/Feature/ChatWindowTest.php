@@ -68,6 +68,54 @@ class ChatWindowTest extends TestCase
         $this->assertSame(0, ChatMessage::count());
     }
 
+    public function test_assistant_replies_render_markdown_and_escape_html(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->create();
+
+        ChatMessage::factory()->for($session)->create([
+            'role' => 'assistant',
+            'content' => "## Status\n**CPU** tinggi\n\n| Metrik | Nilai |\n|---|---|\n| Load | 43 |\n\n<script>alert(1)</script>",
+        ]);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSeeHtml('<h2>Status</h2>')
+            ->assertSeeHtml('<strong>CPU</strong>')
+            ->assertSeeHtml('<td>Load</td>')
+            ->assertDontSeeHtml('<script>alert(1)</script>');
+    }
+
+    public function test_switches_the_ai_provider_from_the_chat(): void
+    {
+        $its = AiSetting::create(['provider' => 'openai_compatible', 'model' => 'qwen3:14b', 'base_url' => 'https://senopati.its.ac.id/llm-gateway/v1', 'api_key' => 'its-key', 'is_active' => true]);
+        $dahl = AiSetting::create(['provider' => 'dahl', 'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731', 'base_url' => 'https://inference.dahl.global/v1', 'api_key' => 'dahl-key', 'is_active' => false]);
+        AiSetting::create(['provider' => 'openai', 'model' => 'gpt-4.1-mini', 'base_url' => 'https://api.openai.com/v1', 'api_key' => null, 'is_active' => false]);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSet('aiSettingId', $its->id)
+            ->assertSee('dahl · deepseek-ai/DeepSeek-V4-Flash-0731')
+            ->assertDontSee('openai · gpt-4.1-mini')
+            ->set('aiSettingId', $dahl->id)
+            ->assertDispatched('ai-provider-changed');
+
+        $this->assertTrue($dahl->fresh()->is_active);
+        $this->assertFalse($its->fresh()->is_active);
+        $this->assertSame('its-key', $its->fresh()->api_key);
+    }
+
+    public function test_a_provider_without_a_key_cannot_be_selected(): void
+    {
+        $its = AiSetting::create(['provider' => 'openai_compatible', 'model' => 'qwen3:14b', 'api_key' => 'its-key', 'is_active' => true]);
+        $openai = AiSetting::create(['provider' => 'openai', 'model' => 'gpt-4.1-mini', 'api_key' => null, 'is_active' => false]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('aiSettingId', $openai->id)
+            ->assertSet('aiSettingId', $its->id);
+
+        $this->assertTrue($its->fresh()->is_active);
+    }
+
     public function test_asks_to_choose_a_database_when_no_project_is_active(): void
     {
         session()->forget('active_project_id');

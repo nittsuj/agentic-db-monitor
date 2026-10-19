@@ -20,6 +20,7 @@ use App\Services\Database\TargetConnectionManager;
 use App\Services\Monitoring\MetricSummaryTool;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -68,8 +69,49 @@ class ChatWindow extends Component
         return Project::query()->orderBy('name')->get(['id', 'name', 'driver', 'database']);
     }
 
+    /** The active AI provider row, switched from the dropdown under the composer. */
+    public ?string $aiSettingId = null;
+
+    /**
+     * Providers that can be used right now (key saved, or no key needed).
+     *
+     * @return array<int, array{id: string, label: string}>
+     */
+    #[Computed]
+    public function aiOptions(): array
+    {
+        return AiSetting::query()
+            ->orderBy('provider')
+            ->get()
+            ->filter(fn (AiSetting $setting): bool => $setting->isUsable())
+            ->map(function (AiSetting $setting): array {
+                $config = AiProviderConfig::resolve($setting);
+
+                return ['id' => (string) $setting->id, 'label' => $config['provider'].' · '.$config['model']];
+            })
+            ->values()
+            ->all();
+    }
+
+    public function updatedAiSettingId(?string $id): void
+    {
+        $setting = $id === null ? null : AiSetting::find($id);
+
+        if ($setting === null || ! $setting->isUsable()) {
+            $this->aiSettingId = AiSetting::where('is_active', true)->value('id');
+
+            return;
+        }
+
+        $setting->activate();
+        $this->errorMessage = null;
+        $this->dispatch('ai-provider-changed');
+    }
+
     public function mount(): void
     {
+        $this->aiSettingId = AiSetting::where('is_active', true)->value('id');
+
         $this->activeProjectId = session('active_project_id');
 
         // A project deleted in another tab leaves a stale id behind; treat it as none.
@@ -78,6 +120,14 @@ class ChatWindow extends Component
         }
         $this->loadOrCreateSession();
         $this->loadMessages();
+
+        // "Tanya agen" on the dashboard opens the chat with a pre-filled question;
+        // the user still reviews it and presses Kirim.
+        $ask = request()->query('ask');
+
+        if (is_string($ask) && trim($ask) !== '') {
+            $this->input = Str::limit(trim($ask), 2000, '');
+        }
     }
 
     private function loadOrCreateSession(): void
@@ -199,6 +249,9 @@ class ChatWindow extends Component
                 ]);
                 $this->messages[] = ['role' => 'assistant', 'content' => $finalContent];
             }
+
+            // The agent may have queued a proposal; let the sidebar badge catch up.
+            $this->dispatch('approvals-changed');
         } catch (Throwable $exception) {
             Log::warning('Database assistant request failed.', [
                 'project_id' => $this->activeProjectId,

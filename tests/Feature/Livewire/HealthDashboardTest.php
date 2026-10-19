@@ -8,6 +8,7 @@ use App\Enums\ActionCategory;
 use App\Enums\ActionDecision;
 use App\Enums\ActionStatus;
 use App\Enums\ThresholdOperator;
+use App\Livewire\Chat\ChatWindow;
 use App\Livewire\Dashboard\HealthDashboard;
 use App\Models\ActionLog;
 use App\Models\MetricSample;
@@ -116,11 +117,27 @@ class HealthDashboardTest extends TestCase
 
         session(['active_project_id' => $project->id]);
 
-        Livewire::withoutLazyLoading()
+        $component = Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
             ->assertSee('1 metrik melewati threshold')
             ->assertSee('Koneksi %')
-            ->assertSee('Breach');
+            ->assertSee('Breach')
+            ->assertSee('Tanya agen');
+
+        $this->assertStringContainsString(
+            'Koneksi % = 91 % (threshold > 80)',
+            $component->instance()->breachQuestion,
+        );
+    }
+
+    public function test_ask_agent_link_prefills_the_chat(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        Livewire::withQueryParams(['ask' => 'Kenapa CPU tinggi?'])
+            ->test(ChatWindow::class)
+            ->assertSet('input', 'Kenapa CPU tinggi?');
     }
 
     public function test_breach_callout_is_not_shown_for_disabled_threshold_or_older_samples(): void

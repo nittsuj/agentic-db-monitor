@@ -88,6 +88,89 @@ class AiSettingsFormTest extends TestCase
         $this->assertSame('gateway-secret-key', $setting->api_key);
     }
 
+    public function test_switching_to_dahl_fills_its_defaults_and_accepts_any_model(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'dahl')
+            ->assertSet('base_url', 'https://inference.dahl.global/v1')
+            ->assertSet('model', 'deepseek-ai/DeepSeek-V4-Flash-0731')
+            ->set('model', 'some-org/another-model')
+            ->set('api_key_input', 'dahl-secret-key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $setting = AiSetting::where('is_active', true)->first();
+
+        $this->assertSame('dahl', $setting->provider);
+        $this->assertSame('some-org/another-model', $setting->model);
+        $this->assertSame('dahl-secret-key', $setting->api_key);
+    }
+
+    public function test_a_key_saved_for_one_provider_is_not_reused_for_another(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Http::fake();
+
+        Livewire::test(AiSettingsForm::class)
+            ->assertSet('has_existing_key', true)
+            ->set('provider', 'dahl')
+            ->assertSet('has_existing_key', false)
+            ->call('testConnection')
+            ->assertSet('test_error', 'Enter an API key before testing the connection.')
+            ->call('save')
+            ->assertHasErrors(['api_key_input' => 'required']);
+
+        Http::assertNothingSent();
+        $this->assertSame('gateway-secret-key', AiSetting::where('is_active', true)->first()->api_key);
+    }
+
+    public function test_each_provider_keeps_its_own_key(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'its-key')
+            ->call('save');
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'dahl')
+            ->set('api_key_input', 'dahl-key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame(1, AiSetting::where('is_active', true)->count());
+        $this->assertSame('dahl', AiSetting::where('is_active', true)->value('provider'));
+        $this->assertSame('its-key', AiSetting::where('provider', 'openai_compatible')->first()->api_key);
+
+        // Switching back finds the ITS key again, so no new key is needed.
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'openai_compatible')
+            ->assertSet('has_existing_key', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('openai_compatible', AiSetting::where('is_active', true)->value('provider'));
+    }
+
+    public function test_connection_test_calls_the_dahl_endpoint(): void
+    {
+        Http::fake([
+            'inference.dahl.global/*' => Http::response(['choices' => [['message' => ['content' => 'OK']]]]),
+        ]);
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'dahl')
+            ->set('api_key_input', 'dahl-secret-key')
+            ->call('testConnection')
+            ->assertSet('test_error', null);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://inference.dahl.global/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer dahl-secret-key')
+            && $request['model'] === 'deepseek-ai/DeepSeek-V4-Flash-0731');
+    }
+
     public function test_requires_api_key_for_new_openai_settings(): void
     {
         Livewire::test(AiSettingsForm::class)

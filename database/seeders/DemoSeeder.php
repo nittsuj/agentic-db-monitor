@@ -70,16 +70,18 @@ class DemoSeeder extends Seeder
 
     private function seedAiSetting($now): void
     {
+        // Keyed on the provider only (one row per provider), and it only becomes
+        // active when the user has not chosen another provider already.
         $this->ensureRow('ai_settings', [
             'provider' => 'openai_compatible',
-            'model' => 'qwen3:14b',
         ], [
+            'model' => 'qwen3:14b',
             'base_url' => 'https://senopati.its.ac.id/llm-gateway/v1',
             // No demo key: a placeholder would be an unusable credential. The
             // key is encrypted in the database, so it has to be entered in
             // /settings/ai and never stored in the repository.
             'api_key' => null,
-            'is_active' => true,
+            'is_active' => ! DB::table('ai_settings')->where('is_active', true)->exists(),
             'created_at' => $now,
             'updated_at' => $now,
         ]);

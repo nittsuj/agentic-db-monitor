@@ -86,17 +86,36 @@ class AiSettingsForm extends Component
             $this->base_url = $defaults['base_url'];
             $this->model = $defaults['model'];
         }
+
+        // A provider that was saved before brings back its own URL and model.
+        $saved = AiSetting::where('provider', $provider)->first();
+
+        if ($saved !== null) {
+            $config = AiProviderConfig::resolve($saved);
+            $this->base_url = $config['base_url'];
+            $this->model = $config['model'];
+        }
+
+        // A stored key belongs to the provider it was saved for; never send it to
+        // another provider, so a provider switch needs its own key.
+        $this->has_existing_key = $this->storedKeyFor($provider) !== '';
+    }
+
+    /**
+     * The saved API key, but only when it was saved for this provider.
+     */
+    private function storedKeyFor(string $provider): string
+    {
+        return AiProviderConfig::apiKey(AiSetting::where('provider', $provider)->first());
     }
 
     public function save(): void
     {
         $this->validate();
 
-        $setting = AiSetting::where('is_active', true)->first();
-
-        if ($setting === null) {
-            $setting = new AiSetting(['is_active' => true]);
-        }
+        // One row per provider, so switching providers keeps every saved key.
+        $setting = AiSetting::where('provider', $this->provider)->first()
+            ?? new AiSetting(['provider' => $this->provider, 'is_active' => true]);
 
         $setting->fill([
             'provider' => $this->provider,
@@ -109,6 +128,8 @@ class AiSettingsForm extends Component
         }
 
         $setting->save();
+        $setting->activate();
+        $this->dispatch('ai-provider-changed');
 
         $this->api_key_input = '';
         $this->has_existing_key = true;
@@ -121,7 +142,7 @@ class AiSettingsForm extends Component
         $this->test_result = null;
         $this->test_error = null;
 
-        if (! in_array($this->provider, ['openai', AiProviderConfig::OPENAI_COMPATIBLE], true)) {
+        if ($this->provider === 'ollama') {
             $this->test_error = 'Connection testing is available for OpenAI-compatible providers only.';
 
             return;
@@ -129,7 +150,7 @@ class AiSettingsForm extends Component
 
         $key = trim($this->api_key_input) !== ''
             ? $this->api_key_input
-            : AiProviderConfig::apiKey(AiSetting::where('is_active', true)->first());
+            : $this->storedKeyFor($this->provider);
 
         if (trim($key) === '') {
             $this->test_error = 'Enter an API key before testing the connection.';

@@ -48,6 +48,15 @@ final class AiProviderConfig
             'api_key_required' => true,
             'models' => ['qwen3:14b'],
         ],
+        // Dahl inference: an OpenAI Chat Completions endpoint, so it uses the same
+        // chat-completions driver as the ITS gateway. Any model name is accepted.
+        'dahl' => [
+            'base_url' => 'https://inference.dahl.global/v1',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'prism' => 'deepseek',
+            'api_key_required' => true,
+            'models' => null,
+        ],
     ];
 
     /**

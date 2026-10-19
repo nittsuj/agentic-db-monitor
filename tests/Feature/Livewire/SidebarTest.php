@@ -46,6 +46,20 @@ class SidebarTest extends TestCase
         Livewire::test(Sidebar::class)->assertSeeHtml('<span class="count">1</span>');
     }
 
+    public function test_the_badge_updates_when_approvals_change(): void
+    {
+        $project = Project::factory()->create();
+        $action = PendingAction::factory()->for($project)->create(['status' => ActionStatus::Pending]);
+        session(['active_project_id' => $project->id]);
+
+        $sidebar = Livewire::test(Sidebar::class)->assertSeeHtml('<span class="count">1</span>');
+
+        $action->update(['status' => ActionStatus::Denied]);
+
+        $sidebar->dispatch('approvals-changed')
+            ->assertDontSeeHtml('<span class="count">');
+    }
+
     public function test_switching_the_project_redirects_to_the_workspace(): void
     {
         $project = Project::factory()->create();

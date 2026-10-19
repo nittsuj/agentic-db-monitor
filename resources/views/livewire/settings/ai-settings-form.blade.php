@@ -89,6 +89,9 @@
                 <span class="mono">openai_compatible</span> — endpoint OpenAI Chat Completions, dipakai untuk LLM gateway ITS.
             </li>
             <li class="muted small">
+                <span class="mono">dahl</span> — Dahl inference (<span class="mono">inference.dahl.global</span>), format OpenAI Chat Completions.
+            </li>
+            <li class="muted small">
                 <span class="mono">ollama</span> — model lokal, tanpa API key.
             </li>
             <li class="muted small">

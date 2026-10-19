@@ -127,6 +127,9 @@ class HealthDashboard extends Component
             $entry = $series->get($card['key']);
             $secondary = $card['secondary'] === null ? null : $series->get($card['secondary']);
             $thresholds = $limits->get($card['key'], collect());
+            $breachedBy = $entry === null
+                ? null
+                : $thresholds->first(fn (Threshold $threshold): bool => $threshold->isBreachedBy((float) $entry['latest']));
 
             $cards[] = [
                 'key' => $card['key'],
@@ -140,14 +143,46 @@ class HealthDashboard extends Component
                     'value' => $secondary['latest'] ?? null,
                 ],
                 'limit' => $thresholds->min('value'),
-                'breached' => $entry === null
-                    ? false
-                    : $thresholds->contains(fn (Threshold $threshold): bool => $threshold->isBreachedBy((float) $entry['latest'])),
+                'breached' => $breachedBy !== null,
+                'rule' => $breachedBy === null
+                    ? null
+                    : $breachedBy->operator->symbol().' '.self::formatNumber($breachedBy->value),
                 'warns' => $metricKey->higherIsWorse(),
             ];
         }
 
         return $cards;
+    }
+
+    /**
+     * The question the "Tanya agen" button pre-fills in the chat: which metrics
+     * breached, their latest value and the rule they broke.
+     */
+    #[Computed]
+    public function breachQuestion(): ?string
+    {
+        $breached = collect($this->kpis)->filter(fn (array $kpi): bool => $kpi['breached']);
+
+        if ($this->project === null || $breached->isEmpty()) {
+            return null;
+        }
+
+        // One line: the chat composer is a single-line input.
+        $metrics = $breached->map(fn (array $kpi): string => sprintf(
+            '%s = %s %s (threshold %s)',
+            $kpi['label'],
+            self::formatNumber((float) $kpi['value']),
+            $kpi['unit'],
+            $kpi['rule'],
+        ))->implode('; ');
+
+        return "Di project {$this->project->name} ({$this->project->driver->value}) metrik ini melewati threshold: {$metrics}. "
+            .'Apa kemungkinan penyebabnya dan langkah apa yang disarankan? Periksa dengan tool diagnostik dan ringkasan metrik.';
+    }
+
+    private static function formatNumber(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
     }
 
     /**

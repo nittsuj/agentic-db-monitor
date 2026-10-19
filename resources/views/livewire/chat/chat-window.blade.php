@@ -3,7 +3,7 @@
 </x-slot:subtitle>
 
 
-<div class="card" style="padding:0;overflow:hidden;height:calc(100vh - 11rem);min-height:28rem;display:flex;flex-direction:column">
+<div class="card" style="padding:0;overflow:hidden;height:calc(100vh - 11rem);min-height:28rem;display:flex;flex-direction:column" x-data="{ pending: '' }">
     @if ($this->project === null)
         {{-- "Choose a database first": opens on load and again when Kirim is pressed without a project. --}}
         <div x-data="{ open: true }"
@@ -58,7 +58,13 @@
                     @if ($message['role'] === 'tool')
                         <span class="label" style="color:var(--adbm-accent)">Hasil tool</span>
                     @endif
-                    <span style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $message['content'] }}</span>
+                    @if ($message['role'] === 'assistant')
+                        {{-- Model output is Markdown. Raw HTML in it is escaped and unsafe
+                             links are dropped, so a reply cannot inject markup or scripts. --}}
+                        <div class="md">{!! \Illuminate\Support\Str::markdown($message['content'], ['html_input' => 'escape', 'allow_unsafe_links' => false]) !!}</div>
+                    @else
+                        <span style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $message['content'] }}</span>
+                    @endif
                 </div>
             </div>
         @empty
@@ -68,20 +74,28 @@
             </div>
         @endforelse
 
-        @if ($assistantContent !== '')
+        {{-- Shown from the moment Kirim is pressed: wire:stream needs this element
+             in the DOM before the request starts, or the streamed tokens have
+             nowhere to land and the reply only appears when the request ends. --}}
+        <div wire:loading.flex wire:target="send" class="od-stack" style="gap:8px">
+            {{-- The user's own message, echoed while the server works on the reply. --}}
+            <div class="od-row" style="justify-content:flex-end" x-show="pending !== ''">
+                <div style="max-width:min(78%,680px);border-radius:12px;padding:10px 13px;background:var(--adbm-accent-soft);color:var(--adbm-text)">
+                    <span x-text="pending" style="font-size:14px;line-height:1.55;white-space:pre-wrap"></span>
+                </div>
+            </div>
+
             <div class="od-row" style="justify-content:flex-start">
                 <div class="od-stack"
                      style="gap:4px;max-width:min(78%,680px);border-radius:12px;padding:10px 13px;background:var(--adbm-panel-2);color:var(--adbm-text)">
                     <span wire:stream="assistantContent" style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $assistantContent }}</span>
                 </div>
             </div>
-        @endif
 
-        @if ($isSending)
             <div class="od-row" style="justify-content:flex-start">
                 <span class="badge info" role="status">Memeriksa database…</span>
             </div>
-        @endif
+        </div>
 
         @if ($errorMessage !== null)
             <div class="alert" role="alert">
@@ -91,7 +105,7 @@
         @endif
     </div>
 
-    <form wire:submit="send" class="od-row" style="gap:10px;border-top:1px solid var(--adbm-border);padding:12px 14px">
+    <form wire:submit="send" x-on:submit="pending = ($wire.input || '').trim()" class="od-row" style="gap:10px;border-top:1px solid var(--adbm-border);padding:12px 14px">
         <input type="text" wire:model="input"
                class="input"
                placeholder="Tanya tentang database…"
@@ -106,4 +120,18 @@
             <span wire:loading wire:target="send">Memproses…</span>
         </button>
     </form>
+
+    @if (count($this->aiOptions) > 0)
+        <div class="od-row" style="gap:8px;padding:0 14px 12px;margin-top:-4px">
+            <label class="label" for="chat-ai-model" style="flex:none">Model AI</label>
+            <select id="chat-ai-model" class="input" style="max-width:340px;padding-top:4px;padding-bottom:4px;font-size:13px"
+                    wire:model.live="aiSettingId"
+                    wire:loading.attr="disabled" wire:target="send">
+                @foreach ($this->aiOptions as $option)
+                    <option value="{{ $option['id'] }}">{{ $option['label'] }}</option>
+                @endforeach
+            </select>
+            <a href="{{ route('settings.ai') }}" class="muted small" style="flex:none">Kelola provider</a>
+        </div>
+    @endif
 </div>

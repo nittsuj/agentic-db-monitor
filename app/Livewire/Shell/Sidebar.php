@@ -12,6 +12,7 @@ use App\Services\Ai\AiProviderConfig;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class Sidebar extends Component
@@ -23,6 +24,17 @@ class Sidebar extends Component
     public function mount(): void
     {
         $this->projectId = (string) (session('active_project_id') ?? '');
+    }
+
+    /**
+     * Re-render so the pending-approval badge follows decisions and new
+     * proposals without a page refresh.
+     */
+    #[On('approvals-changed')]
+    #[On('ai-provider-changed')]
+    public function refreshApprovals(): void
+    {
+        // Rendering recomputes the badge; nothing else to do.
     }
 
     public function updatedProjectId(): void

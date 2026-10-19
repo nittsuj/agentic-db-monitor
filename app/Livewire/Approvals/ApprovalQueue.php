@@ -58,6 +58,7 @@ class ApprovalQueue extends Component
                 $action,
                 "Approval outcome: the user approved `{$action->command}` and it executed successfully ({$result['result']})."
             );
+            $this->dispatch('approvals-changed');
 
             return;
         }
@@ -80,6 +81,7 @@ class ApprovalQueue extends Component
             $action,
             "Approval outcome: the user approved `{$action->command}` but it failed: {$result['error']}. Do not retry automatically; explain the failure and suggest a corrected plan."
         );
+        $this->dispatch('approvals-changed');
     }
 
     public function deny(string $id): void
@@ -106,6 +108,7 @@ class ApprovalQueue extends Component
             $action,
             "Approval outcome: the user denied `{$action->command}`; it was not executed. Acknowledge the decision and propose an alternative only if the user asks."
         );
+        $this->dispatch('approvals-changed');
     }
 
     public function render(): View
