@@ -51,6 +51,35 @@ class ThresholdManagerTest extends TestCase
         ]);
     }
 
+    public function test_accepts_metrics_from_the_extended_key_set(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        Livewire::test(ThresholdManager::class)
+            ->set('key', 'buffer_hit_ratio')
+            ->set('operator', 'lt')
+            ->set('value', 90)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('thresholds', [
+            'project_id' => $project->id,
+            'key' => 'buffer_hit_ratio',
+        ]);
+    }
+
+    public function test_rejects_unknown_metric_keys(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        Livewire::test(ThresholdManager::class)
+            ->set('key', 'made_up_metric')
+            ->call('save')
+            ->assertHasErrors(['key']);
+    }
+
     public function test_update_threshold(): void
     {
         $project = Project::factory()->create();

@@ -29,8 +29,8 @@ class HealthDashboardTest extends TestCase
 
         Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
-            ->assertSee('No workspace selected')
-            ->assertSee('Add a database profile or pick one from the sidebar.');
+            ->assertSee('Belum ada project dipilih')
+            ->assertSee('Tambahkan profil database atau pilih project dari sidebar.');
     }
 
     public function test_shows_latest_value_of_each_metric_for_active_project(): void
@@ -59,9 +59,9 @@ class HealthDashboardTest extends TestCase
         Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
             ->assertSee('Production DB')
-            ->assertSee('Connection Pool Used')
+            ->assertSee('Koneksi %')
             ->assertSee('75.5')
-            ->assertSee('Slow Queries Per Min')
+            ->assertSee('Slow query / menit')
             ->assertSee('4.2');
     }
 
@@ -118,8 +118,8 @@ class HealthDashboardTest extends TestCase
 
         Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
-            ->assertSee('1 metric over threshold')
-            ->assertSee('Connection Pool Used')
+            ->assertSee('1 metrik melewati threshold')
+            ->assertSee('Koneksi %')
             ->assertSee('Breach');
     }
 
@@ -145,7 +145,7 @@ class HealthDashboardTest extends TestCase
 
         Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
-            ->assertDontSee('over threshold')
+            ->assertDontSee('melewati threshold')
             ->assertDontSee('Breach');
 
         // Now test older sample over threshold, but latest sample under threshold
@@ -160,11 +160,11 @@ class HealthDashboardTest extends TestCase
 
         Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
-            ->assertDontSee('over threshold')
+            ->assertDontSee('melewati threshold')
             ->assertSee('OK');
     }
 
-    public function test_range_filter_excludes_samples_outside_window_and_clamps_invalid_hours(): void
+    public function test_range_filter_excludes_samples_outside_window_and_clamps_invalid_ranges(): void
     {
         $project = Project::factory()->create();
 
@@ -182,18 +182,18 @@ class HealthDashboardTest extends TestCase
 
         session(['active_project_id' => $project->id]);
 
-        // Window 6h excludes 8h sample
+        // The six hour window excludes the eight hour sample.
         $component = Livewire::withoutLazyLoading()
             ->test(HealthDashboard::class)
-            ->call('setRange', 6);
+            ->call('setRange', 360);
 
-        $metrics = $component->get('metrics');
-        $this->assertCount(1, $metrics);
-        $this->assertEquals([55.0], $metrics->first()['values']->all());
+        $series = $component->get('series');
+        $this->assertCount(1, $series);
+        $this->assertEquals([55.0], $series->first()['values']->all());
 
-        // Invalid hours fall back to 24h
+        // An unknown range falls back to 24 hours.
         $component->call('setRange', 999);
-        $this->assertSame(24, $component->get('hours'));
+        $this->assertSame(1440, $component->get('minutes'));
     }
 
     public function test_lists_only_pending_actions_under_pending_approvals(): void
@@ -258,10 +258,10 @@ class HealthDashboardTest extends TestCase
             ->test(HealthDashboard::class)
             ->assertSee($project->name)
             ->assertSee('mysql')
-            ->assertSee('Connection Pool Used')
-            ->assertSee('Slow Queries Per Min')
-            ->assertSee('Pending approvals')
-            ->assertSee('Recent actions')
-            ->assertSee('Thresholds');
+            ->assertSee('Koneksi %')
+            ->assertSee('Slow query / menit')
+            ->assertSee('Persetujuan tertunda')
+            ->assertSee('Aksi terakhir')
+            ->assertSee('Threshold');
     }
 }

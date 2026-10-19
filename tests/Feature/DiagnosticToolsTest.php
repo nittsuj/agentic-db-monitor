@@ -26,21 +26,22 @@ class DiagnosticToolsTest extends TestCase
             'password' => 'secret',
         ]);
 
+        $manager = app(TargetConnectionManager::class);
+        $driver = DiagnosticTools::driverFor('mysql');
+
         try {
-            $connection = app(TargetConnectionManager::class)->connect($project);
+            $connection = $manager->connect($project);
+            $tables = $driver->listTables($connection);
         } catch (\Throwable $e) {
             $this->markTestSkipped('MySQL not available: '.$e->getMessage());
+        } finally {
+            $manager->purge($manager->connectionName($project));
         }
-
-        $driver = DiagnosticTools::driverFor('mysql');
-        $tables = $driver->listTables($connection);
 
         $this->assertIsArray($tables);
 
         $tools = DiagnosticTools::for($connection, $driver);
         $this->assertCount(5, $tools);
-
-        app(TargetConnectionManager::class)->purge($connection->getName());
     }
 
     public function test_postgres_driver_lists_tables(): void
@@ -54,17 +55,18 @@ class DiagnosticToolsTest extends TestCase
             'password' => 'secret',
         ]);
 
+        $manager = app(TargetConnectionManager::class);
+        $driver = DiagnosticTools::driverFor('pgsql');
+
         try {
-            $connection = app(TargetConnectionManager::class)->connect($project);
+            $connection = $manager->connect($project);
+            $tables = $driver->listTables($connection);
         } catch (\Throwable $e) {
             $this->markTestSkipped('Postgres not available: '.$e->getMessage());
+        } finally {
+            $manager->purge($manager->connectionName($project));
         }
 
-        $driver = DiagnosticTools::driverFor('pgsql');
-        $tables = $driver->listTables($connection);
-
         $this->assertIsArray($tables);
-
-        app(TargetConnectionManager::class)->purge($connection->getName());
     }
 }

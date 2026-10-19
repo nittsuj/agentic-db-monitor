@@ -11,10 +11,15 @@ class MutationExecutor
 {
     public function __construct(
         protected TargetConnectionManager $connectionManager,
+        protected StatementClassifier $classifier,
     ) {}
 
     public function execute(PendingAction $action): array
     {
+        if ($this->classifier->containsMultipleStatements($action->command)) {
+            return ['success' => false, 'error' => 'Refused to execute: the action contains more than one statement.'];
+        }
+
         $project = Project::find($action->project_id);
 
         if ($project === null) {

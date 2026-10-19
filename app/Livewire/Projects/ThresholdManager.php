@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Livewire\Projects;
 
+use App\Enums\MetricKey;
 use App\Enums\ThresholdOperator;
 use App\Models\Threshold;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
+#[Title('Threshold — Agentic DB Monitor')]
 class ThresholdManager extends Component
 {
     public ?string $activeProjectId = null;
@@ -31,7 +35,7 @@ class ThresholdManager extends Component
     protected function rules(): array
     {
         return [
-            'key' => ['required', 'in:connection_pool_used,slow_queries_per_min'],
+            'key' => ['required', Rule::in(MetricKey::values())],
             'operator' => ['required', 'in:gt,gte,lt,lte,eq,ne'],
             'value' => ['required', 'numeric'],
             'enabled' => ['boolean'],
@@ -108,6 +112,7 @@ class ThresholdManager extends Component
         return view('livewire.projects.threshold-manager', [
             'thresholds' => $thresholds,
             'operators' => ThresholdOperator::cases(),
+            'metricKeys' => MetricKey::cases(),
         ]);
     }
 }

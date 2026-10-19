@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Livewire\Settings\AiSettingsForm;
 use App\Models\AiSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -16,12 +17,30 @@ class AiSettingsFormTest extends TestCase
 
     public function test_renders_form(): void
     {
-        Livewire::test(AiSettingsForm::class)->assertSee('AI Provider Settings');
+        Livewire::test(AiSettingsForm::class)->assertSee('Pengaturan AI');
+    }
+
+    public function test_defaults_to_the_its_llm_gateway(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->assertSet('provider', 'openai_compatible')
+            ->assertSet('model', 'qwen3:14b')
+            ->assertSet('base_url', 'https://senopati.its.ac.id/llm-gateway/v1');
+    }
+
+    public function test_gateway_rejects_models_outside_the_allow_list(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('model', 'some-other-model')
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('save')
+            ->assertHasErrors(['model']);
     }
 
     public function test_saves_new_settings_and_encrypts_key(): void
     {
         Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'ollama')
             ->set('model', 'llama3.2')
             ->set('base_url', 'https://ollama.com')
             ->set('api_key_input', 'super-secret-key')
@@ -51,6 +70,22 @@ class AiSettingsFormTest extends TestCase
 
         $this->assertSame('openai', $setting->provider);
         $this->assertSame('openai-secret-key', $setting->api_key);
+    }
+
+    public function test_switching_to_openai_compatible_fills_gateway_defaults(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'openai_compatible')
+            ->assertSet('base_url', 'https://senopati.its.ac.id/llm-gateway/v1')
+            ->assertSet('model', 'qwen3:14b')
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $setting = AiSetting::where('is_active', true)->first();
+
+        $this->assertSame('openai_compatible', $setting->provider);
+        $this->assertSame('gateway-secret-key', $setting->api_key);
     }
 
     public function test_requires_api_key_for_new_openai_settings(): void
@@ -91,5 +126,70 @@ class AiSettingsFormTest extends TestCase
             ->set('api_key_input', 'some-key')
             ->call('save')
             ->assertHasErrors(['base_url']);
+    }
+
+    public function test_connection_reports_success(): void
+    {
+        Http::fake([
+            'senopati.its.ac.id/*' => Http::response(['choices' => [['message' => ['content' => 'OK']]]]),
+        ]);
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('testConnection')
+            ->assertSet('test_result', 'Connection successful. The provider supports function calling, so the diagnostic tools are available.')
+            ->assertSet('test_error', null);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://senopati.its.ac.id/llm-gateway/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer gateway-secret-key')
+            && $request['model'] === 'qwen3:14b');
+    }
+
+    public function test_connection_reports_a_provider_without_function_calling(): void
+    {
+        Http::fake(function ($request) {
+            if (isset($request['tools'])) {
+                return Http::response(['error' => ['message' => 'tools is not supported by this model']], 400);
+            }
+
+            return Http::response(['choices' => [['message' => ['content' => 'OK']]]]);
+        });
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('testConnection')
+            ->assertSet('test_result', 'Connection successful. The provider rejected function calling, so the chat will answer without diagnostic tools.');
+    }
+
+    public function test_connection_reports_a_rejected_key(): void
+    {
+        Http::fake([
+            'senopati.its.ac.id/*' => Http::response(['error' => 'invalid key'], 401),
+        ]);
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'wrong-key')
+            ->call('testConnection')
+            ->assertSet('test_result', null)
+            ->assertSet('test_error', 'Authentication failed (401). Check the API key.');
+    }
+
+    public function test_connection_reports_rate_limiting(): void
+    {
+        Http::fake([
+            'senopati.its.ac.id/*' => Http::response(['error' => 'slow down'], 429),
+        ]);
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('api_key_input', 'gateway-secret-key')
+            ->call('testConnection')
+            ->assertSet('test_error', 'Rate limited (429). Wait a moment and try again.');
+    }
+
+    public function test_connection_requires_a_key(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->call('testConnection')
+            ->assertSet('test_error', 'Enter an API key before testing the connection.');
     }
 }

@@ -11,4 +11,5 @@ enum ActionStatus: string
     case Denied = 'denied';
     case Executed = 'executed';
     case Failed = 'failed';
+    case Expired = 'expired';
 }

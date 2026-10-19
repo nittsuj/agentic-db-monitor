@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\ActionCategory;
 use App\Enums\ActionStatus;
 use App\Enums\DbDriver;
+use Carbon\CarbonInterface;
 use Database\Factories\PendingActionFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,11 @@ class PendingAction extends Model
     use HasFactory;
 
     use HasUuids;
+
+    /**
+     * Actions older than this are no longer actionable.
+     */
+    public const EXPIRES_AFTER_HOURS = 24;
 
     protected $fillable = [
         'project_id',
@@ -44,6 +50,22 @@ class PendingAction extends Model
             'decided_at' => 'datetime',
             'executed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Mark stale pending actions as expired and return the number changed.
+     */
+    public static function expireStale(?CarbonInterface $now = null): int
+    {
+        $now ??= now();
+
+        return static::query()
+            ->where('status', ActionStatus::Pending)
+            ->where('proposed_at', '<=', $now->copy()->subHours(self::EXPIRES_AFTER_HOURS))
+            ->update([
+                'status' => ActionStatus::Expired,
+                'decided_at' => $now,
+            ]);
     }
 
     /**

@@ -25,3 +25,15 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+# Generated diagrams / illustrations (not part of the app)
+/.archify
+/docs/diagrams
+/docs/illustrations
+# DBPA dataset and derived files (large; regenerate with database/dbpa/convert_dbpa.py)
+/DBPA_dataset
+/database/dbpa/csv
+/database/dbpa/case_index.json
+/_to_delete
+
+# Local Claude Code settings (per machine)
+/.claude/settings.local.json

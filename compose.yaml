@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    ports:
+      # Local single-user app: keep it off every network interface.
+      - "127.0.0.1:8000:8000"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+      APP_KEY: ${APP_KEY:-}
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /data/database.sqlite
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: sync
+      LOG_CHANNEL: stderr
+      PHP_CLI_SERVER_WORKERS: "4"
+      TARGET_DB_HOST: ${TARGET_DB_HOST:-host.docker.internal}
+      SEED_DEMO: ${SEED_DEMO:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - app-data:/data
+      # The DBPA CSV files are not baked into the image; mount them read-only so
+      # `php artisan dbpa:import --path=/dbpa/csv` can load the replay data.
+      - ./database/dbpa/csv:/dbpa/csv:ro
+
+volumes:
+  app-data:

@@ -71,4 +71,24 @@ class MySqlDiagnosticDriver implements DiagnosticDriver
              LIMIT 20"
         );
     }
+
+    public function collectMetrics(ConnectionInterface $connection): array
+    {
+        $pool = $this->checkConnectionPool($connection);
+
+        $rows = $connection->select("SHOW GLOBAL STATUS WHERE Variable_name IN ('Slow_queries','Uptime')");
+        $status = [];
+        foreach ($rows as $row) {
+            $status[$row->Variable_name] = $row->Value;
+        }
+
+        $uptimeMinutes = max(1.0, ((float) ($status['Uptime'] ?? 0)) / 60);
+
+        return [
+            'connection_pool_used' => $pool['max_connections'] > 0
+                ? round(100 * $pool['threads_connected'] / $pool['max_connections'], 2)
+                : 0.0,
+            'slow_queries_per_min' => round(((float) ($status['Slow_queries'] ?? 0)) / $uptimeMinutes, 3),
+        ];
+    }
 }

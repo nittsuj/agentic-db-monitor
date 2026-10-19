@@ -71,11 +71,14 @@ class DemoSeeder extends Seeder
     private function seedAiSetting($now): void
     {
         $this->ensureRow('ai_settings', [
-            'provider' => 'ollama',
-            'model' => 'llama3.1',
+            'provider' => 'openai_compatible',
+            'model' => 'qwen3:14b',
         ], [
-            'base_url' => 'https://ollama.com',
-            'api_key' => 'ollama-demo-key',
+            'base_url' => 'https://senopati.its.ac.id/llm-gateway/v1',
+            // No demo key: a placeholder would be an unusable credential. The
+            // key is encrypted in the database, so it has to be entered in
+            // /settings/ai and never stored in the repository.
+            'api_key' => null,
             'is_active' => true,
             'created_at' => $now,
             'updated_at' => $now,

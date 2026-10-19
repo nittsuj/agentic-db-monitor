@@ -32,7 +32,7 @@ class TargetConnectionManager
 
         $config = $this->buildConfig(
             driver: $project->driver,
-            host: $project->host,
+            host: $this->resolveHost($project->host),
             port: $project->port,
             database: $project->database,
             username: $project->username,
@@ -63,7 +63,7 @@ class TargetConnectionManager
 
         $config = $this->buildConfig(
             driver: $driver,
-            host: $host,
+            host: $this->resolveHost($host),
             port: $port,
             database: $database,
             username: $username,
@@ -84,6 +84,18 @@ class TargetConnectionManager
     {
         DB::purge($connectionName);
         Config::set("database.connections.{$connectionName}", null);
+    }
+
+    /**
+     * Resolve loopback target hosts when the app runs inside Docker.
+     */
+    protected function resolveHost(string $host): string
+    {
+        if (! in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+            return $host;
+        }
+
+        return (string) env('TARGET_DB_HOST', $host);
     }
 
     /**

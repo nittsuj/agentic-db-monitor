@@ -22,4 +22,11 @@ interface DiagnosticDriver
 
     /** @return array<int, array<string, mixed>> */
     public function analyzeTableBloat(ConnectionInterface $connection): array;
+
+    /**
+     * Read the metrics the collector stores on every monitoring tick.
+     *
+     * @return array<string, float>
+     */
+    public function collectMetrics(ConnectionInterface $connection): array;
 }

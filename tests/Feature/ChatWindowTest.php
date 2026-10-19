@@ -122,4 +122,75 @@ class ChatWindowTest extends TestCase
             $this->assertSame('gpt-4.1-mini', $recorded[0]->model());
         });
     }
+
+    public function test_send_defaults_to_the_its_llm_gateway_when_unconfigured(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        $fake = Prism::fake([
+            TextResponseFake::make()->withText('Ready.'),
+        ]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('input', 'Check the database.')
+            ->call('send')
+            ->assertHasNoErrors();
+
+        $fake->assertRequest(function ($recorded) {
+            $this->assertSame('deepseek', $recorded[0]->provider());
+            $this->assertSame('qwen3:14b', $recorded[0]->model());
+        });
+    }
+
+    public function test_send_offers_the_diagnostic_and_telemetry_tools(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+
+        $fake = Prism::fake([
+            TextResponseFake::make()->withText('Ready.'),
+        ]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('input', 'How is the database doing?')
+            ->call('send')
+            ->assertHasNoErrors();
+
+        $fake->assertRequest(function ($recorded) {
+            $names = array_map(fn ($tool): string => $tool->name(), $recorded[0]->tools());
+
+            $this->assertContains('list_tables', $names);
+            $this->assertContains('get_metric_summary', $names);
+            $this->assertContains('propose_mutation', $names);
+        });
+    }
+
+    public function test_openai_compatible_provider_uses_chat_completions_driver_and_strips_thinking(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        AiSetting::factory()->create([
+            'provider' => 'openai_compatible',
+            'model' => 'qwen3:14b',
+            'base_url' => 'https://senopati.its.ac.id/llm-gateway/v1',
+            'api_key' => 'test-gateway-key',
+        ]);
+
+        $fake = Prism::fake([
+            TextResponseFake::make()->withText('<think>internal reasoning</think>Ready.'),
+        ]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('input', 'Check the database.')
+            ->call('send')
+            ->assertHasNoErrors();
+
+        $fake->assertRequest(function ($recorded) {
+            $this->assertSame('deepseek', $recorded[0]->provider());
+            $this->assertSame('qwen3:14b', $recorded[0]->model());
+        });
+
+        $this->assertDatabaseHas('chat_messages', ['role' => 'assistant', 'content' => 'Ready.']);
+    }
 }

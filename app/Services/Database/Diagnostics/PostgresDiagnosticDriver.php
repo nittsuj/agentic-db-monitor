@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Database\Diagnostics;
 
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\QueryException;
 
 class PostgresDiagnosticDriver implements DiagnosticDriver
 {
@@ -61,5 +62,33 @@ class PostgresDiagnosticDriver implements DiagnosticDriver
              ORDER BY n_dead_tup DESC
              LIMIT 20'
         );
+    }
+
+    public function collectMetrics(ConnectionInterface $connection): array
+    {
+        $pool = $this->checkConnectionPool($connection);
+
+        $uptime = $connection->selectOne(
+            'SELECT EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time())) AS seconds'
+        );
+        $uptimeMinutes = max(1.0, ((float) ($uptime->seconds ?? 0)) / 60);
+
+        try {
+            $slow = $connection->selectOne(
+                'SELECT COUNT(*) AS c FROM pg_stat_statements WHERE mean_exec_time > 1000'
+            );
+            $slowQueries = (int) ($slow->c ?? 0);
+        } catch (QueryException) {
+            // pg_stat_statements is optional; report no slow statements instead of
+            // failing the whole collection tick.
+            $slowQueries = 0;
+        }
+
+        return [
+            'connection_pool_used' => $pool['max_connections'] > 0
+                ? round(100 * $pool['active_connections'] / $pool['max_connections'], 2)
+                : 0.0,
+            'slow_queries_per_min' => round($slowQueries / $uptimeMinutes, 3),
+        ];
     }
 }

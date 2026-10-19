@@ -4,67 +4,50 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? config('app.name') }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @fluxAppearance
 </head>
-<body class="min-h-screen bg-white dark:bg-zinc-800">
-    <flux:sidebar sticky class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-        <flux:sidebar.nav>
-            <flux:sidebar.item icon="chart-bar" :href="route('dashboard')" :current="request()->routeIs('dashboard')">
-                Dashboard
-            </flux:sidebar.item>
-            <flux:sidebar.item icon="chat-bubble-left-right" :href="route('chat')" :current="request()->routeIs('chat')">
-                Chat
-            </flux:sidebar.item>
-            <flux:sidebar.item icon="shield-check" :href="route('approvals')" :current="request()->routeIs('approvals')">
-                Approvals
-            </flux:sidebar.item>
-            <flux:sidebar.item icon="cog-6-tooth" :href="route('settings.ai')" :current="request()->routeIs('settings.ai')">
-                AI Settings
-            </flux:sidebar.item>
-            <flux:sidebar.item icon="adjustments-horizontal" :href="route('thresholds')" :current="request()->routeIs('thresholds')">
-                Thresholds
-            </flux:sidebar.item>
-        </flux:sidebar.nav>
+<body>
+    <x-icons />
 
-        <flux:sidebar.nav class="mt-6">
-            <div class="flex items-center justify-between px-3 py-1">
-                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    Workspaces
-                </span>
-                <flux:modal.trigger name="create-project-modal">
-                    <flux:button size="xs" variant="ghost" icon="plus" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" title="Add Database Profile" />
-                </flux:modal.trigger>
-            </div>
+    <div class="app">
+        <livewire:shell.sidebar />
 
-            @forelse (\App\Models\Project::orderBy('name')->get() as $p)
-                <flux:sidebar.item
-                    :href="route('switch-project', $p)"
-                    :current="session('active_project_id') === $p->id"
-                    icon="circle-stack">
-                    {{ $p->name }}
-                </flux:sidebar.item>
-            @empty
-                <div class="px-3 py-2 text-xs text-zinc-400">
-                    No databases connected
+        <div class="scrim" id="scrim"></div>
+
+        <main class="main" id="main">
+            <div class="top">
+                <div class="top-l">
+                    <button type="button" class="btn icon menu-btn" id="menuBtn" aria-label="Buka menu" aria-expanded="false" aria-controls="side">
+                        <svg class="od-icon"><use href="#i-menu" /></svg>
+                    </button>
+
+                    <div class="od-stack" style="gap:4px;min-width:0">
+                        <h1 id="pageTitle" tabindex="-1">{{ $heading ?? $title ?? config('app.name') }}</h1>
+                        @isset($subtitle)
+                            <span class="mono muted small od-truncate" id="pageSub">{{ $subtitle }}</span>
+                        @endisset
+                    </div>
                 </div>
-            @endforelse
 
-            <div class="px-2 pt-2">
-                <flux:modal.trigger name="create-project-modal">
-                    <flux:button size="sm" variant="outline" class="w-full justify-start" icon="plus">
-                        Add Database
-                    </flux:button>
-                </flux:modal.trigger>
+                <div class="od-cluster" style="gap:12px" id="topActions">
+                    {{ $actions ?? '' }}
+                </div>
             </div>
-        </flux:sidebar.nav>
-    </flux:sidebar>
 
-    <flux:main>
-        {{ $slot }}
-    </flux:main>
+            <div id="view">
+                {{ $slot }}
+            </div>
+        </main>
+    </div>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
     <livewire:projects.create-project-modal />
+    <livewire:projects.project-manager />
 
     @fluxScripts
 </body>

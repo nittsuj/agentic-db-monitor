@@ -1,39 +1,62 @@
-<div class="flex h-[calc(100vh-8rem)] min-h-96 flex-col border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
-    <div class="flex-1 overflow-y-auto space-y-3 p-4" aria-live="polite">
-        @foreach ($messages as $m)
-            <div class="{{ $m['role'] === 'user' ? 'text-right' : 'text-left' }}">
-                <div class="inline-block max-w-[80%] rounded-lg px-3 py-2 {{ $m['role'] === 'user' ? 'bg-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800' }}">
-                    {{ $m['content'] }}
+<x-slot:subtitle>
+    Diagnosis read-only · {{ $this->project?->name ?? '—' }}
+</x-slot:subtitle>
+
+<div class="card" style="padding:0;overflow:hidden;height:calc(100vh - 11rem);min-height:28rem;display:flex;flex-direction:column">
+    <div class="od-stack" style="gap:10px;overflow-y:auto;flex:1 1 auto;padding:18px" aria-live="polite">
+        @forelse ($messages as $message)
+            <div class="od-row" style="justify-content:{{ $message['role'] === 'user' ? 'flex-end' : 'flex-start' }}">
+                <div class="od-stack"
+                     style="gap:4px;max-width:min(78%,680px);border-radius:12px;padding:10px 13px;background:{{ $message['role'] === 'user' ? 'var(--adbm-accent-soft)' : 'var(--adbm-panel-2)' }};color:var(--adbm-text)">
+                    @if ($message['role'] === 'tool')
+                        <span class="label" style="color:var(--adbm-accent)">Hasil tool</span>
+                    @endif
+                    <span style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $message['content'] }}</span>
                 </div>
             </div>
-        @endforeach
+        @empty
+            <div class="od-stack" style="gap:8px;align-items:center;justify-content:center;height:100%;text-align:center">
+                <svg class="od-icon" style="width:30px;height:30px;color:var(--adbm-muted)"><use href="#i-chat" /></svg>
+                <p class="muted small">Tanya kondisi database, misalnya “query apa yang paling lambat?” atau “kenapa koneksi menumpuk?”</p>
+            </div>
+        @endforelse
+
         @if ($assistantContent !== '')
-            <div class="text-left">
-                <div wire:stream="assistantContent" class="inline-block max-w-[80%] rounded-lg px-3 py-2 bg-zinc-100 dark:bg-zinc-800">
-                    {{ $assistantContent }}
+            <div class="od-row" style="justify-content:flex-start">
+                <div class="od-stack"
+                     style="gap:4px;max-width:min(78%,680px);border-radius:12px;padding:10px 13px;background:var(--adbm-panel-2);color:var(--adbm-text)">
+                    <span wire:stream="assistantContent" style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $assistantContent }}</span>
                 </div>
             </div>
         @endif
+
         @if ($isSending)
-            <div class="text-left" role="status">
-                <div class="inline-flex items-center gap-2 bg-zinc-100 px-3 py-2 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    <span class="size-2 animate-pulse rounded-full bg-emerald-500"></span>
-                    Checking your database…
-                </div>
+            <div class="od-row" style="justify-content:flex-start">
+                <span class="badge info" role="status">Memeriksa database…</span>
             </div>
         @endif
+
         @if ($errorMessage !== null)
-            <div class="border-s-2 border-red-500 bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200" role="alert">
-                {{ $errorMessage }}
+            <div class="alert" role="alert">
+                <svg class="od-icon" style="color:var(--adbm-danger)"><use href="#i-alert" /></svg>
+                <span>{{ $errorMessage }}</span>
             </div>
         @endif
     </div>
 
-    <form wire:submit="send" class="flex gap-2 border-t border-zinc-200 p-3 dark:border-zinc-700">
-        <input wire:model="input" type="text" class="min-w-0 flex-1 border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-600 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white" placeholder="Ask about your database…" aria-label="Message" />
-        <button type="submit" wire:loading.attr="disabled" wire:target="send" @disabled($isSending) class="inline-flex items-center gap-2 bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60">
-            <span wire:loading.remove wire:target="send">Send</span>
-            <span wire:loading wire:target="send">Working…</span>
+    <form wire:submit="send" class="od-row" style="gap:10px;border-top:1px solid var(--adbm-border);padding:12px 14px">
+        <input type="text" wire:model="input"
+               class="input"
+               placeholder="Tanya tentang database…"
+               aria-label="Pesan"
+               @disabled($isSending)>
+
+        <button type="submit" class="btn primary" wire:loading.attr="disabled" wire:target="send" @disabled($isSending)>
+            <span wire:loading.remove wire:target="send">
+                <svg class="od-icon"><use href="#i-send" /></svg>
+                Kirim
+            </span>
+            <span wire:loading wire:target="send">Memproses…</span>
         </button>
     </form>
 </div>

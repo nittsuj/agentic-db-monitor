@@ -9,7 +9,9 @@ use App\Enums\ActionDecision;
 use App\Enums\ActionStatus;
 use App\Enums\ChatRole;
 use App\Enums\DbDriver;
+use App\Enums\MetricKey;
 use App\Enums\ThresholdOperator;
+use App\Enums\ToolSupport;
 use PHPUnit\Framework\TestCase;
 
 class EnumsTest extends TestCase
@@ -33,7 +35,7 @@ class EnumsTest extends TestCase
 
     public function test_action_status_cases(): void
     {
-        $this->assertSame(['pending', 'approved', 'denied', 'executed', 'failed'], array_map(fn ($c) => $c->value, ActionStatus::cases()));
+        $this->assertSame(['pending', 'approved', 'denied', 'executed', 'failed', 'expired'], array_map(fn ($c) => $c->value, ActionStatus::cases()));
     }
 
     public function test_action_decision_cases(): void
@@ -44,5 +46,30 @@ class EnumsTest extends TestCase
     public function test_threshold_operator_cases(): void
     {
         $this->assertSame(['gt', 'gte', 'lt', 'lte', 'eq', 'ne'], array_map(fn ($c) => $c->value, ThresholdOperator::cases()));
+    }
+
+    public function test_tool_support_cases(): void
+    {
+        $this->assertSame(['supported', 'unsupported', 'unknown'], array_map(fn ($c) => $c->value, ToolSupport::cases()));
+
+        $this->assertTrue(ToolSupport::Supported->allowsTools());
+        $this->assertFalse(ToolSupport::Unsupported->allowsTools());
+        $this->assertTrue(ToolSupport::Unknown->allowsTools());
+    }
+
+    public function test_metric_key_units_and_direction(): void
+    {
+        $this->assertCount(11, MetricKey::cases());
+
+        $this->assertSame('%', MetricKey::ConnectionPoolUsed->unit());
+        $this->assertSame('count', MetricKey::Locks->unit());
+        $this->assertSame('load', MetricKey::Load1m->unit());
+
+        $this->assertTrue(MetricKey::Locks->higherIsWorse());
+        $this->assertFalse(MetricKey::BufferHitRatio->higherIsWorse());
+
+        $this->assertTrue(MetricKey::LongRunningQueries->availableFor(DbDriver::PgSql));
+        $this->assertFalse(MetricKey::LongRunningQueries->availableFor(DbDriver::MySql));
+        $this->assertTrue(MetricKey::Locks->availableFor(DbDriver::MySql));
     }
 }

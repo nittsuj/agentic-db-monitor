@@ -4,30 +4,38 @@ declare(strict_types=1);
 
 namespace App\Livewire\Chat;
 
-use App\Enums\ActionStatus;
 use App\Enums\ChatRole;
+use App\Enums\ToolSupport;
 use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
-use App\Models\PendingAction;
 use App\Models\Project;
+use App\Services\Ai\AiErrorTranslator;
+use App\Services\Ai\AiProviderConfig;
+use App\Services\Ai\HiddenTagStreamFilter;
+use App\Services\Ai\ProposeMutationTool;
+use App\Services\Ai\ToolSupportVerifier;
 use App\Services\Database\DiagnosticTools;
-use App\Services\Database\StatementClassifier;
 use App\Services\Database\TargetConnectionManager;
-use Illuminate\Contracts\Encryption\DecryptException;
+use App\Services\Monitoring\MetricSummaryTool;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Title;
 use Livewire\Component;
+use Prism\Prism\Contracts\Message;
 use Prism\Prism\Facades\Prism;
-use Prism\Prism\Schema\StringSchema;
 use Prism\Prism\Streaming\Events\TextDeltaEvent;
 use Prism\Prism\Tool;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Throwable;
 
+#[Title('Chat diagnostik — Agentic DB Monitor')]
 class ChatWindow extends Component
 {
+    public const TOOLS_UNSUPPORTED_WARNING = 'This AI provider does not support function calling, so the diagnostic tools were unavailable and the assistant answered without live database data.';
+
     public string $input = '';
 
     public string $assistantContent = '';
@@ -41,6 +49,12 @@ class ChatWindow extends Component
     public ?string $chatSessionId = null;
 
     public ?string $activeProjectId = null;
+
+    #[Computed]
+    public function project(): ?Project
+    {
+        return Project::find($this->activeProjectId);
+    }
 
     public function mount(): void
     {
@@ -110,89 +124,55 @@ class ChatWindow extends Component
 
             $chatSessionId = $this->chatSessionId;
 
-            $proposeTool = (new Tool)
-                ->as('propose_mutation')
-                ->for('Propose a mutating SQL statement (INSERT/UPDATE/DELETE/DDL/maintenance) for explicit user approval. The statement is NOT executed; it is queued for approval. Only use for statements the user has requested.')
-                ->withParameter(new StringSchema('command', 'The exact SQL statement to propose'))
-                ->using(function (string $command) use ($project, $chatSessionId) {
-                    $category = app(StatementClassifier::class)->classify($command);
+            $tools[] = ProposeMutationTool::make($project, $chatSessionId);
+            $tools[] = MetricSummaryTool::make($project->id);
 
-                    if ($category === null) {
-                        return ['status' => 'rejected', 'reason' => 'Statement is read-only or not recognized; use diagnostic tools instead.'];
-                    }
+            $aiConfig = AiProviderConfig::resolve(AiSetting::where('is_active', true)->first());
 
-                    $action = PendingAction::create([
-                        'project_id' => $project->id,
-                        'chat_session_id' => $chatSessionId,
-                        'engine' => $project->driver->value,
-                        'category' => $category,
-                        'command' => $command,
-                        'status' => ActionStatus::Pending,
-                        'proposed_at' => now(),
-                    ]);
+            $verifier = app(ToolSupportVerifier::class);
+            $toolSupport = $verifier->cached($aiConfig) ?? ToolSupport::Unknown;
 
-                    return [
-                        'status' => 'pending_approval',
-                        'pending_action_id' => $action->id,
-                        'category' => $category->value,
-                        'message' => 'Action proposed and awaiting user approval. Do not execute or retry; inform the user.',
-                    ];
-                });
-
-            $tools[] = $proposeTool;
-
-            $aiSetting = AiSetting::where('is_active', true)->first();
-            $provider = $aiSetting?->provider ?? 'ollama';
-            $model = $aiSetting?->model ?? ($provider === 'openai' ? 'gpt-4.1-mini' : 'llama3.1');
-            $baseUrl = $aiSetting?->base_url ?? ($provider === 'openai' ? 'https://api.openai.com/v1' : 'https://ollama.com');
-
-            $apiKey = '';
-            if ($aiSetting !== null) {
-                try {
-                    $apiKey = $aiSetting->api_key ?? '';
-                } catch (DecryptException $e) {
-                    $apiKey = '';
-                }
+            if ($toolSupport === ToolSupport::Unsupported) {
+                $tools = [];
+                $this->errorMessage = self::TOOLS_UNSUPPORTED_WARNING;
             }
 
-            $systemPrompt = 'You are a database diagnostics assistant. Use read-only diagnostic tools when they can answer the user\'s question. Only inspect table schemas when relevant, and only for tables returned by list_tables. Read-only tools execute automatically. Never execute mutating SQL. When the user explicitly requests a database change, use propose_mutation to queue it for approval; do not claim it has executed.';
-
             $history = ChatMessage::where('chat_session_id', $this->chatSessionId)
-                ->whereIn('role', [ChatRole::User, ChatRole::Assistant])
+                ->whereIn('role', [ChatRole::User, ChatRole::Assistant, ChatRole::Tool])
                 ->latest('created_at')
                 ->limit(20)
                 ->get()
                 ->reverse()
-                ->map(fn (ChatMessage $message) => $message->role === ChatRole::User
-                    ? new UserMessage($message->content)
-                    : new AssistantMessage($message->content))
+                ->map(fn (ChatMessage $message) => match ($message->role) {
+                    ChatRole::User => new UserMessage($message->content),
+                    ChatRole::Tool => new UserMessage("[tool result] {$message->content}"),
+                    default => new AssistantMessage($message->content),
+                })
                 ->values()
                 ->all();
 
-            $this->assistantContent = '';
-
-            $stream = Prism::text()
-                ->using($provider, $model, ['api_key' => $apiKey, 'url' => $baseUrl])
-                ->withSystemPrompt($systemPrompt)
-                ->withMessages($history)
-                ->withTools($tools)
-                ->withMaxSteps(6)
-                ->asStream();
-
-            foreach ($stream as $event) {
-                if ($event instanceof TextDeltaEvent) {
-                    $this->assistantContent .= $event->delta;
-                    $this->stream('assistantContent', $event->delta);
+            try {
+                $finalContent = $this->streamReply($aiConfig, $tools, $history);
+            } catch (Throwable $exception) {
+                if ($tools === [] || ! ToolSupportVerifier::indicatesUnsupportedTools($exception)) {
+                    throw $exception;
                 }
+
+                // FR-27: the provider rejected function calling, so the chat falls
+                // back to a tool-free mode and the user is told why.
+                $verifier->remember($aiConfig, ToolSupport::Unsupported);
+                $this->errorMessage = self::TOOLS_UNSUPPORTED_WARNING;
+
+                $finalContent = $this->streamReply($aiConfig, [], $history);
             }
 
-            if ($this->assistantContent !== '') {
+            if ($finalContent !== '') {
                 ChatMessage::create([
                     'chat_session_id' => $this->chatSessionId,
                     'role' => ChatRole::Assistant,
-                    'content' => $this->assistantContent,
+                    'content' => $finalContent,
                 ]);
-                $this->messages[] = ['role' => 'assistant', 'content' => $this->assistantContent];
+                $this->messages[] = ['role' => 'assistant', 'content' => $finalContent];
             }
         } catch (Throwable $exception) {
             Log::warning('Database assistant request failed.', [
@@ -201,7 +181,7 @@ class ChatWindow extends Component
             ]);
             $this->input = $text;
             $this->assistantContent = '';
-            $this->errorMessage = 'The assistant could not complete that request. Check your AI provider settings and database connection, then try again.';
+            $this->errorMessage = app(AiErrorTranslator::class)->translate($exception);
         } finally {
             if ($connectionName !== null) {
                 $connectionManager->purge($connectionName);
@@ -210,6 +190,66 @@ class ChatWindow extends Component
             $this->assistantContent = '';
             $this->isSending = false;
         }
+    }
+
+    /**
+     * Stream one assistant reply and return the content to store.
+     *
+     * @param  array<string, mixed>  $aiConfig
+     * @param  array<int, Tool>  $tools
+     * @param  array<int, Message>  $history
+     */
+    private function streamReply(array $aiConfig, array $tools, array $history): string
+    {
+        $this->assistantContent = '';
+
+        $request = Prism::text()
+            ->using($aiConfig['prism'], $aiConfig['model'], [
+                'api_key' => $aiConfig['api_key'],
+                'url' => $aiConfig['base_url'],
+            ])
+            ->withClientOptions(AiProviderConfig::clientOptions())
+            ->withSystemPrompt($this->systemPrompt($tools === []))
+            ->withMessages($history)
+            ->withMaxSteps(6);
+
+        if ($tools !== []) {
+            $request = $request->withTools($tools);
+        }
+
+        $filter = new HiddenTagStreamFilter;
+
+        foreach ($request->asStream() as $event) {
+            if ($event instanceof TextDeltaEvent) {
+                $this->appendVisibleDelta($filter->push($event->delta));
+            }
+        }
+
+        $this->appendVisibleDelta($filter->flush());
+
+        // Safety net for malformed or unbalanced reasoning tags.
+        return trim((string) preg_replace('/<think>.*?<\/think>/s', '', $this->assistantContent));
+    }
+
+    private function systemPrompt(bool $withoutTools): string
+    {
+        $prompt = 'You are a database diagnostics assistant. Use read-only diagnostic tools when they can answer the user\'s question. Only inspect table schemas when relevant, and only for tables returned by list_tables. Read-only tools execute automatically. Never execute mutating SQL. When the user explicitly requests a database change, use propose_mutation to queue it for approval; do not claim it has executed.';
+
+        if ($withoutTools) {
+            $prompt .= ' You currently have no diagnostic tools available because this provider does not support function calling. Say so plainly, work from the conversation and the telemetry summary you have, and name the read-only checks the user should run manually.';
+        }
+
+        return $prompt;
+    }
+
+    private function appendVisibleDelta(string $delta): void
+    {
+        if ($delta === '') {
+            return;
+        }
+
+        $this->assistantContent .= $delta;
+        $this->stream('assistantContent', $delta);
     }
 
     public function render(): View
