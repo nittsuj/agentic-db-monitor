@@ -19,7 +19,7 @@ RUN npm run build
 
 FROM php:8.4-cli AS app
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libpq-dev \
+    && apt-get install -y --no-install-recommends git unzip libpq-dev openssh-client \
     && docker-php-ext-install pdo_mysql pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

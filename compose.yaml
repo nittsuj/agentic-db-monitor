@@ -11,6 +11,8 @@ services:
       APP_KEY: ${APP_KEY:-}
       DB_CONNECTION: sqlite
       DB_DATABASE: /data/database.sqlite
+      # Pinned bastion host keys must survive rebuilds.
+      ADBM_SSH_STATE_DIR: /data/ssh
       SESSION_DRIVER: database
       CACHE_STORE: database
       QUEUE_CONNECTION: sync
