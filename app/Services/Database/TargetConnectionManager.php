@@ -7,6 +7,9 @@ namespace App\Services\Database;
 use App\Enums\DbDriver;
 use App\Enums\SslMode;
 use App\Models\Project;
+use App\Services\Database\Ssh\SshTunnel;
+use App\Services\Database\Ssh\SshTunnelConfig;
+use App\Services\Database\Ssh\SshTunnelManager;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -17,9 +20,20 @@ class TargetConnectionManager
 {
     protected CaCertificateStore $certificates;
 
-    public function __construct(?CaCertificateStore $certificates = null)
+    protected SshTunnelManager $tunnels;
+
+    /**
+     * Open tunnels by connection name. Static so a tunnel lives as long as its
+     * connection, whichever manager instance opened it.
+     *
+     * @var array<string, SshTunnel>
+     */
+    protected static array $openTunnels = [];
+
+    public function __construct(?CaCertificateStore $certificates = null, ?SshTunnelManager $tunnels = null)
     {
         $this->certificates = $certificates ?? new CaCertificateStore;
+        $this->tunnels = $tunnels ?? new SshTunnelManager;
     }
 
     /**
@@ -38,11 +52,12 @@ class TargetConnectionManager
     public function connect(Project $project): ConnectionInterface
     {
         $name = $this->connectionName($project);
+        [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? []);
 
         $config = $this->buildConfig(
             driver: $project->driver,
-            host: $this->resolveHost($project->host),
-            port: $project->port,
+            host: $host,
+            port: $port,
             database: $project->database,
             username: $project->username,
             password: $project->password,
@@ -72,10 +87,11 @@ class TargetConnectionManager
         array $options = [],
     ): ConnectionInterface {
         $tempName = 'target_temp_verify_'.uniqid();
+        [$host, $port] = $this->endpoint($tempName, $host, $port, $options);
 
         $config = $this->buildConfig(
             driver: $driver,
-            host: $this->resolveHost($host),
+            host: $host,
             port: $port,
             database: $database,
             username: $username,
@@ -96,6 +112,47 @@ class TargetConnectionManager
     {
         DB::purge($connectionName);
         Config::set("database.connections.{$connectionName}", null);
+
+        if (isset(static::$openTunnels[$connectionName])) {
+            static::$openTunnels[$connectionName]->close();
+            unset(static::$openTunnels[$connectionName]);
+        }
+    }
+
+    /**
+     * Where the driver should connect. Through a bastion that is the local
+     * end of an SSH forward; the database host is then resolved by the
+     * bastion, so it is passed on unchanged (localhost there is the bastion).
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{0: string, 1: int}
+     */
+    protected function endpoint(string $connectionName, string $host, int $port, array $options): array
+    {
+        $ssh = SshTunnelConfig::fromOptions($options);
+
+        if ($ssh === null) {
+            return [$this->resolveHost($host), $port];
+        }
+
+        if (isset(static::$openTunnels[$connectionName])) {
+            static::$openTunnels[$connectionName]->close();
+        }
+
+        $bastion = new SshTunnelConfig(
+            host: $this->resolveHost($ssh->host),
+            port: $ssh->port,
+            username: $ssh->username,
+            auth: $ssh->auth,
+            privateKey: $ssh->privateKey,
+            passphrase: $ssh->passphrase,
+            password: $ssh->password,
+        );
+
+        $tunnel = $this->tunnels->open($bastion, $host, $port);
+        static::$openTunnels[$connectionName] = $tunnel;
+
+        return ['127.0.0.1', $tunnel->localPort];
     }
 
     /**

@@ -7,6 +7,9 @@ namespace Tests\Unit;
 use App\Enums\DbDriver;
 use App\Models\Project;
 use App\Services\Database\CaCertificateStore;
+use App\Services\Database\Ssh\SshTunnel;
+use App\Services\Database\Ssh\SshTunnelConfig;
+use App\Services\Database\Ssh\SshTunnelManager;
 use App\Services\Database\TargetConnectionManager;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +81,53 @@ class TargetConnectionManagerTest extends TestCase
         $modern = 'Pdo\\Mysql::ATTR_'.$name;
 
         return defined($modern) ? constant($modern) : constant("PDO::MYSQL_ATTR_{$name}");
+    }
+
+    public function test_ssh_enabled_project_connects_through_the_local_end_of_the_tunnel(): void
+    {
+        $tunnels = new class extends SshTunnelManager
+        {
+            /** @var list<array{0: SshTunnelConfig, 1: string, 2: int}> */
+            public array $opened = [];
+
+            public function open(SshTunnelConfig $config, string $remoteHost, int $remotePort, int $timeout = 10): SshTunnel
+            {
+                $this->opened[] = [$config, $remoteHost, $remotePort];
+
+                return new SshTunnel(45678, null);
+            }
+        };
+
+        $this->manager = new TargetConnectionManager($this->store(null), $tunnels);
+
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            // localhost here is the bastion itself, so it must not be rewritten.
+            'host' => 'localhost',
+            'port' => 5432,
+            'options' => ['ssh' => [
+                'enabled' => true,
+                'host' => 'bastion.example.com',
+                'port' => 22,
+                'username' => 'tunnel',
+                'auth' => 'key',
+                'private_key' => SshTunnelConfig::encrypt('KEY'),
+            ]],
+        ]);
+
+        $this->manager->connect($project);
+        $name = $this->manager->connectionName($project);
+
+        $this->assertSame('127.0.0.1', Config::get("database.connections.{$name}.host"));
+        $this->assertSame(45678, Config::get("database.connections.{$name}.port"));
+
+        [$config, $remoteHost, $remotePort] = $tunnels->opened[0];
+        $this->assertSame('bastion.example.com', $config->host);
+        $this->assertSame('KEY', $config->privateKey);
+        $this->assertSame('localhost', $remoteHost);
+        $this->assertSame(5432, $remotePort);
+
+        $this->manager->purge($name);
     }
 
     public function test_pgsql_defaults_to_prefer_without_ssl_options(): void
