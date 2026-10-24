@@ -15,6 +15,7 @@ use App\Models\Project;
 use App\Models\Threshold;
 use App\Services\Database\PermissionChecker;
 use App\Services\Database\PermissionCheckResult;
+use App\Services\Database\Ssh\SshTunnelConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Mockery;
@@ -89,6 +90,56 @@ class ProjectManagerTest extends TestCase
             ->call('edit', $project->id)
             ->call('testConnection')
             ->assertSet('notice', 'Koneksi berhasil, semua pemeriksaan lulus.');
+    }
+
+    public function test_editing_keeps_the_stored_ssh_key_when_left_empty(): void
+    {
+        $key = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => ['ssh' => [
+                'enabled' => true,
+                'host' => 'old-bastion',
+                'port' => 22,
+                'username' => 'tunnel',
+                'auth' => 'key',
+                'private_key' => SshTunnelConfig::encrypt($key),
+                'passphrase' => null,
+            ]],
+        ]);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->assertSet('sshEnabled', true)
+            ->assertSet('sshHasStoredKey', true)
+            ->assertSet('sshPrivateKey', '')
+            ->set('sshHost', 'new-bastion')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $ssh = $project->fresh()->options['ssh'];
+
+        $this->assertSame('new-bastion', $ssh['host']);
+        $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
+    }
+
+    public function test_disabling_ssh_keeps_the_stored_settings(): void
+    {
+        $project = Project::factory()->create([
+            'options' => ['ssh' => ['enabled' => true, 'host' => 'bastion', 'port' => 22, 'username' => 'tunnel', 'auth' => 'password', 'password' => SshTunnelConfig::encrypt('pw')]],
+        ]);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->set('sshEnabled', false)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $ssh = $project->fresh()->options['ssh'];
+
+        $this->assertFalse($ssh['enabled']);
+        $this->assertSame('pw', SshTunnelConfig::decrypt($ssh['password']));
     }
 
     public function test_projects_without_ssl_options_edit_as_prefer(): void

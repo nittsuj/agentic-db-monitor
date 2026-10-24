@@ -65,6 +65,8 @@
 
                 @include('livewire.projects.partials.ssl-fields', ['prefix' => 'cp'])
 
+                @include('livewire.projects.partials.ssh-fields', ['prefix' => 'cp'])
+
                 <div class="od-row" style="gap:8px;justify-content:flex-end;border-top:1px solid var(--adbm-border);padding-top:14px">
                     <flux:modal.close>
                         <button type="button" class="btn ghost">Batal</button>

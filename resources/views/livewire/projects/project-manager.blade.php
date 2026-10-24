@@ -83,6 +83,8 @@
 
                         @include('livewire.projects.partials.ssl-fields', ['prefix' => 'pm'])
 
+                        @include('livewire.projects.partials.ssh-fields', ['prefix' => 'pm'])
+
                         @include('livewire.projects.partials.preflight-results')
 
                         <div class="od-row" style="gap:8px;justify-content:flex-end;border-top:1px solid var(--adbm-border);padding-top:14px">

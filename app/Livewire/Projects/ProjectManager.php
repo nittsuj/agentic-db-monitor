@@ -6,6 +6,7 @@ namespace App\Livewire\Projects;
 
 use App\Enums\DbDriver;
 use App\Livewire\Forms\ConnectionPreflight;
+use App\Livewire\Forms\ConnectionSshFields;
 use App\Livewire\Forms\ConnectionSslFields;
 use App\Models\Project;
 use App\Services\Database\PermissionChecker;
@@ -21,6 +22,7 @@ use Livewire\Component;
 class ProjectManager extends Component
 {
     use ConnectionPreflight;
+    use ConnectionSshFields;
     use ConnectionSslFields;
 
     public ?string $projectId = null;
@@ -58,6 +60,7 @@ class ProjectManager extends Component
         $this->username = $project->username;
         $this->password = '';
         $this->fillSslFrom($project);
+        $this->fillSshFrom($project);
         $this->clearPreflight();
         $this->confirmingDelete = false;
         $this->errorMessage = null;
@@ -88,7 +91,7 @@ class ProjectManager extends Component
             'database' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255'],
             'password' => ['nullable', 'string'],
-        ] + $this->sslRules();
+        ] + $this->connectionRules();
     }
 
     public function save(): void
@@ -121,7 +124,7 @@ class ProjectManager extends Component
             'port' => $this->port,
             'database' => $this->database,
             'username' => $this->username,
-            'options' => $this->sslOptions($project->options ?? []),
+            'options' => $this->connectionOptions($project->options ?? []),
         ];
 
         // An empty password field keeps the stored credential.
@@ -130,6 +133,7 @@ class ProjectManager extends Component
         }
 
         $project->update($attributes);
+        $this->fillSshFrom($project);
 
         $this->notice = 'Project "'.$project->name.'" diperbarui.';
         $this->password = '';
@@ -155,7 +159,7 @@ class ProjectManager extends Component
             database: $this->database,
             username: $this->username,
             password: $this->password !== '' ? $this->password : $project->password,
-            options: $this->sslOptions($project->options ?? []),
+            options: $this->connectionOptions($project->options ?? []),
         );
 
         $this->applyPreflight($result);

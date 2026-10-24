@@ -10,6 +10,7 @@ use App\Livewire\Projects\CreateProjectModal;
 use App\Models\Project;
 use App\Services\Database\PermissionChecker;
 use App\Services\Database\PermissionCheckResult;
+use App\Services\Database\Ssh\SshTunnelConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Mockery;
@@ -242,6 +243,70 @@ class CreateProjectModalTest extends TestCase
             ->assertSet('reviewing', true);
 
         $this->assertDatabaseEmpty('projects');
+    }
+
+    public function test_stores_ssh_settings_with_encrypted_secrets(): void
+    {
+        $key = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->once()
+            ->withArgs(fn (...$args) => SshTunnelConfig::fromOptions($args['options'] ?? $args[6])?->privateKey === $key)
+            ->andReturn(PermissionCheckResult::success(privilegeLevel: PrivilegeLevel::ReadOnly));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Behind bastion')
+            ->set('driver', 'pgsql')
+            ->set('host', '10.0.1.20')
+            ->set('database', 'shop')
+            ->set('sshEnabled', true)
+            ->set('sshHost', 'bastion.example.com')
+            ->set('sshUsername', 'tunnel')
+            ->set('sshPrivateKey', $key)
+            ->set('sshPassphrase', 'phrase')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $ssh = Project::sole()->options['ssh'];
+
+        $this->assertTrue($ssh['enabled']);
+        $this->assertSame('bastion.example.com', $ssh['host']);
+        $this->assertStringNotContainsString('OPENSSH', $ssh['private_key']);
+        $this->assertNotSame('phrase', $ssh['passphrase']);
+        $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
+    }
+
+    public function test_ssh_requires_a_key_and_rejects_hostname_verification(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldNotReceive('check');
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Behind bastion')
+            ->set('driver', 'pgsql')
+            ->set('database', 'shop')
+            ->set('sslMode', 'verify-full')
+            ->set('sshEnabled', true)
+            ->set('sshHost', 'bastion.example.com')
+            ->set('sshUsername', 'tunnel')
+            ->call('save')
+            ->assertHasErrors(['sshPrivateKey', 'sslMode']);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Behind bastion')
+            ->set('driver', 'mysql')
+            ->set('database', 'shop')
+            ->set('sslMode', 'verify-ca')
+            ->set('sshEnabled', true)
+            ->set('sshHost', 'bastion.example.com')
+            ->set('sshUsername', 'tunnel')
+            ->set('sshPrivateKey', 'not a key')
+            ->call('save')
+            ->assertHasErrors(['sshPrivateKey', 'sslMode']);
     }
 
     public function test_managed_provider_hosts_default_to_require(): void

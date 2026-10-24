@@ -6,6 +6,7 @@ namespace App\Livewire\Projects;
 
 use App\Enums\DbDriver;
 use App\Livewire\Forms\ConnectionPreflight;
+use App\Livewire\Forms\ConnectionSshFields;
 use App\Livewire\Forms\ConnectionSslFields;
 use App\Models\Project;
 use App\Services\Database\PermissionChecker;
@@ -16,6 +17,7 @@ use Livewire\Component;
 class CreateProjectModal extends Component
 {
     use ConnectionPreflight;
+    use ConnectionSshFields;
     use ConnectionSslFields;
 
     public string $name = '';
@@ -47,7 +49,8 @@ class CreateProjectModal extends Component
      */
     public function updated(string $property): void
     {
-        if (in_array($property, ['driver', 'host', 'port', 'database', 'username', 'password', 'sslMode', 'sslCa'], true)) {
+        if (in_array($property, ['driver', 'host', 'port', 'database', 'username', 'password', 'sslMode', 'sslCa'], true)
+            || str_starts_with($property, 'ssh')) {
             $this->reviewing = false;
         }
     }
@@ -78,7 +81,7 @@ class CreateProjectModal extends Component
             'database' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255'],
             'password' => ['nullable', 'string'],
-        ] + $this->sslRules();
+        ] + $this->connectionRules();
     }
 
     public function save(PermissionChecker $checker): void
@@ -101,7 +104,7 @@ class CreateProjectModal extends Component
             database: $this->database,
             username: $this->username,
             password: $this->password,
-            options: $this->sslOptions(),
+            options: $this->connectionOptions(),
         );
 
         if (! $result->successful) {
@@ -148,7 +151,7 @@ class CreateProjectModal extends Component
             'database' => $this->database,
             'username' => $this->username,
             'password' => $this->password,
-            'options' => $this->sslOptions(),
+            'options' => $this->connectionOptions(),
             'is_active' => true,
         ]);
 
