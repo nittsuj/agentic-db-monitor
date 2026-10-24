@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Livewire;
 
 use App\Enums\DbDriver;
+use App\Enums\PrivilegeLevel;
 use App\Livewire\Projects\CreateProjectModal;
 use App\Models\Project;
 use App\Services\Database\PermissionChecker;
@@ -160,6 +161,85 @@ class CreateProjectModalTest extends TestCase
             ->set('sslCa', 'not a certificate')
             ->call('save')
             ->assertHasErrors(['sslCa']);
+
+        $this->assertDatabaseEmpty('projects');
+    }
+
+    public function test_admin_connection_is_shown_before_saving_and_needs_a_second_click(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->once()
+            ->andReturn(PermissionCheckResult::success(
+                passedChecks: ['Read access to pg_catalog'],
+                privilegeLevel: PrivilegeLevel::Admin,
+                privilegeNotes: ["'postgres' is a superuser."],
+                currentUser: 'postgres',
+            ));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        $component = Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Prod')
+            ->set('driver', 'pgsql')
+            ->set('host', 'db.example.com')
+            ->set('database', 'shop')
+            ->call('save')
+            ->assertSet('reviewing', true)
+            ->assertSet('privilegeLevel', 'admin')
+            ->assertSee('Terhubung sebagai superuser / admin')
+            ->assertSee('CREATE ROLE adbm_ro LOGIN')
+            ->assertSee('Tetap simpan dengan user admin');
+
+        $this->assertDatabaseEmpty('projects');
+
+        // The reviewed result is reused; the checker is not called again.
+        $component->call('save')->assertRedirect(route('dashboard'));
+
+        $this->assertDatabaseCount('projects', 1);
+    }
+
+    public function test_missing_features_are_shown_before_saving(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->once()
+            ->andReturn(PermissionCheckResult::success(
+                warnings: ["Extension 'pg_stat_statements' is not installed in this database."],
+                privilegeLevel: PrivilegeLevel::ReadOnly,
+            ));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Prod')
+            ->set('database', 'shop')
+            ->call('save')
+            ->assertSet('reviewing', true)
+            ->assertSee('Fitur pemantauan yang belum tersedia')
+            ->assertSee('pg_stat_statements');
+
+        $this->assertDatabaseEmpty('projects');
+    }
+
+    public function test_changing_a_connection_field_after_review_tests_again(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->twice()
+            ->andReturn(PermissionCheckResult::success(privilegeLevel: PrivilegeLevel::Admin));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Prod')
+            ->set('database', 'shop')
+            ->call('save')
+            ->assertSet('reviewing', true)
+            ->set('username', 'adbm_ro')
+            ->assertSet('reviewing', false)
+            ->call('save')
+            ->assertSet('reviewing', true);
 
         $this->assertDatabaseEmpty('projects');
     }

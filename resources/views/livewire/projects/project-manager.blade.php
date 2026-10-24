@@ -83,8 +83,14 @@
 
                         @include('livewire.projects.partials.ssl-fields', ['prefix' => 'pm'])
 
+                        @include('livewire.projects.partials.preflight-results')
+
                         <div class="od-row" style="gap:8px;justify-content:flex-end;border-top:1px solid var(--adbm-border);padding-top:14px">
                             <button type="button" class="btn ghost" wire:click="cancel">Batal</button>
+                            <button type="button" class="btn ghost" wire:click="testConnection" wire:loading.attr="disabled" wire:target="testConnection">
+                                <span wire:loading.remove wire:target="testConnection">Tes koneksi</span>
+                                <span wire:loading wire:target="testConnection">Menguji…</span>
+                            </button>
                             <button type="submit" class="btn primary">Simpan perubahan</button>
                         </div>
                     </form>

@@ -16,19 +16,7 @@
                 </div>
             @endif
 
-            @if (count($warnings) > 0)
-                <div class="alert" style="border-color:var(--adbm-warning);background-color:var(--adbm-warning-soft)">
-                    <svg class="od-icon" style="color:var(--adbm-warning)"><use href="#i-info" /></svg>
-                    <div class="od-stack" style="gap:4px">
-                        <strong>Rekomendasi hak akses</strong>
-                        <ul style="list-style:disc;padding-left:18px;margin:0" class="small">
-                            @foreach ($warnings as $warning)
-                                <li>{{ $warning }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                </div>
-            @endif
+            @include('livewire.projects.partials.preflight-results')
 
             <form wire:submit="save" class="od-stack" style="gap:12px">
                 <div class="od-stack" style="gap:6px">
@@ -83,8 +71,13 @@
                     </flux:modal.close>
 
                     <button type="submit" class="btn primary" wire:loading.attr="disabled">
-                        <span wire:loading.remove>Uji hak akses &amp; simpan</span>
-                        <span wire:loading>Menguji hak akses…</span>
+                        @if ($reviewing)
+                            <span wire:loading.remove>{{ $this->isAdminConnection() ? 'Tetap simpan dengan user admin' : 'Tetap simpan' }}</span>
+                            <span wire:loading>Menyimpan…</span>
+                        @else
+                            <span wire:loading.remove>Uji hak akses &amp; simpan</span>
+                            <span wire:loading>Menguji hak akses…</span>
+                        @endif
                     </button>
                 </div>
             </form>

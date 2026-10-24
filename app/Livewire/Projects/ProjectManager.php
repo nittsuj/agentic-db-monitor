@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Livewire\Projects;
 
 use App\Enums\DbDriver;
+use App\Livewire\Forms\ConnectionPreflight;
 use App\Livewire\Forms\ConnectionSslFields;
 use App\Models\Project;
+use App\Services\Database\PermissionChecker;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -18,6 +20,7 @@ use Livewire\Component;
  */
 class ProjectManager extends Component
 {
+    use ConnectionPreflight;
     use ConnectionSslFields;
 
     public ?string $projectId = null;
@@ -55,6 +58,7 @@ class ProjectManager extends Component
         $this->username = $project->username;
         $this->password = '';
         $this->fillSslFrom($project);
+        $this->clearPreflight();
         $this->confirmingDelete = false;
         $this->errorMessage = null;
         $this->notice = null;
@@ -130,6 +134,41 @@ class ProjectManager extends Component
         $this->notice = 'Project "'.$project->name.'" diperbarui.';
         $this->password = '';
         $this->confirmingDelete = false;
+    }
+
+    /**
+     * Run the pre-flight against the form's current values without saving.
+     * An empty password field tests with the stored credential.
+     */
+    public function testConnection(PermissionChecker $checker): void
+    {
+        $this->validate();
+        $this->errorMessage = null;
+        $this->notice = null;
+
+        $project = Project::findOrFail($this->projectId);
+
+        $result = $checker->check(
+            driver: DbDriver::from($this->driver),
+            host: $this->host,
+            port: $this->port,
+            database: $this->database,
+            username: $this->username,
+            password: $this->password !== '' ? $this->password : $project->password,
+            options: $this->sslOptions($project->options ?? []),
+        );
+
+        $this->applyPreflight($result);
+
+        if (! $result->successful) {
+            $this->errorMessage = $result->errorMessage;
+
+            return;
+        }
+
+        if (! $result->needsReview()) {
+            $this->notice = 'Koneksi berhasil, semua pemeriksaan lulus.';
+        }
     }
 
     public function delete(): void

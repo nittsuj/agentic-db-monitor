@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Projects;
 
 use App\Enums\DbDriver;
+use App\Livewire\Forms\ConnectionPreflight;
 use App\Livewire\Forms\ConnectionSslFields;
 use App\Models\Project;
 use App\Services\Database\PermissionChecker;
@@ -14,6 +15,7 @@ use Livewire\Component;
 
 class CreateProjectModal extends Component
 {
+    use ConnectionPreflight;
     use ConnectionSslFields;
 
     public string $name = '';
@@ -35,14 +37,20 @@ class CreateProjectModal extends Component
     public ?string $errorMessage = null;
 
     /**
-     * @var list<string>
+     * Set once a successful check had something to show. The next save stores
+     * the profile without re-testing, unless a connection field changes.
      */
-    public array $passedChecks = [];
+    public bool $reviewing = false;
 
     /**
-     * @var list<string>
+     * Any change to what was tested invalidates the reviewed result.
      */
-    public array $warnings = [];
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['driver', 'host', 'port', 'database', 'username', 'password', 'sslMode', 'sslCa'], true)) {
+            $this->reviewing = false;
+        }
+    }
 
     public function updatedDriver(string $driver): void
     {
@@ -76,9 +84,15 @@ class CreateProjectModal extends Component
     public function save(PermissionChecker $checker): void
     {
         $this->validate();
-        $this->resetFeedback();
-
         $dbDriver = DbDriver::from($this->driver);
+
+        if ($this->reviewing) {
+            $this->store($dbDriver);
+
+            return;
+        }
+
+        $this->resetFeedback();
 
         $result = $checker->check(
             driver: $dbDriver,
@@ -92,12 +106,26 @@ class CreateProjectModal extends Component
 
         if (! $result->successful) {
             $this->errorMessage = $result->errorMessage;
-            $this->passedChecks = $result->passedChecks;
-            $this->warnings = $result->warnings;
+            $this->applyPreflight($result);
 
             return;
         }
 
+        $this->applyPreflight($result);
+
+        // Missing features and admin users are shown first; saving then
+        // takes a second, deliberate click.
+        if ($result->needsReview()) {
+            $this->reviewing = true;
+
+            return;
+        }
+
+        $this->store($dbDriver);
+    }
+
+    protected function store(DbDriver $dbDriver): void
+    {
         // Check unique tuple
         $existing = Project::where('driver', $dbDriver)
             ->where('host', $this->host)
@@ -135,8 +163,8 @@ class CreateProjectModal extends Component
     public function resetFeedback(): void
     {
         $this->errorMessage = null;
-        $this->passedChecks = [];
-        $this->warnings = [];
+        $this->reviewing = false;
+        $this->clearPreflight();
     }
 
     public function render(): View

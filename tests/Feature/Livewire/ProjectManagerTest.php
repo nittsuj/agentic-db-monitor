@@ -6,14 +6,18 @@ namespace Tests\Feature\Livewire;
 
 use App\Enums\ActionDecision;
 use App\Enums\DbDriver;
+use App\Enums\PrivilegeLevel;
 use App\Livewire\Projects\ProjectManager;
 use App\Models\ActionLog;
 use App\Models\ChatSession;
 use App\Models\MetricSample;
 use App\Models\Project;
 use App\Models\Threshold;
+use App\Services\Database\PermissionChecker;
+use App\Services\Database\PermissionCheckResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Mockery;
 use Tests\TestCase;
 
 class ProjectManagerTest extends TestCase
@@ -39,6 +43,52 @@ class ProjectManagerTest extends TestCase
 
         $this->assertSame('disable', $project->options['ssl']['mode']);
         $this->assertSame('demo-seeder', $project->options['source']);
+    }
+
+    public function test_test_connection_uses_the_stored_password_and_shows_the_result(): void
+    {
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'username' => 'postgres',
+            'password' => 'stored-secret',
+        ]);
+
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->once()
+            ->withArgs(fn (...$args) => ($args['password'] ?? $args[5] ?? null) === 'stored-secret')
+            ->andReturn(PermissionCheckResult::success(
+                privilegeLevel: PrivilegeLevel::Admin,
+                privilegeNotes: ["'postgres' is a superuser."],
+                currentUser: 'postgres',
+            ));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->call('testConnection')
+            ->assertSet('privilegeLevel', 'admin')
+            ->assertSee('Terhubung sebagai superuser / admin');
+
+        // Testing never saves.
+        $this->assertSame('stored-secret', $project->fresh()->password);
+    }
+
+    public function test_test_connection_reports_a_clean_pass(): void
+    {
+        $project = Project::factory()->create();
+
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')->once()
+            ->andReturn(PermissionCheckResult::success(privilegeLevel: PrivilegeLevel::ReadOnly));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->call('testConnection')
+            ->assertSet('notice', 'Koneksi berhasil, semua pemeriksaan lulus.');
     }
 
     public function test_projects_without_ssl_options_edit_as_prefer(): void
