@@ -81,6 +81,8 @@
                             </div>
                         </div>
 
+                        @include('livewire.projects.partials.ssl-fields', ['prefix' => 'pm'])
+
                         <div class="od-row" style="gap:8px;justify-content:flex-end;border-top:1px solid var(--adbm-border);padding-top:14px">
                             <button type="button" class="btn ghost" wire:click="cancel">Batal</button>
                             <button type="submit" class="btn primary">Simpan perubahan</button>

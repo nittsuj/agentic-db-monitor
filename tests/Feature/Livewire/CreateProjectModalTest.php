@@ -12,6 +12,7 @@ use App\Services\Database\PermissionCheckResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Mockery;
+use Tests\Support\TestCertificate;
 use Tests\TestCase;
 
 class CreateProjectModalTest extends TestCase
@@ -116,5 +117,63 @@ class CreateProjectModalTest extends TestCase
             ->set('username', 'svc_monitor')
             ->call('save')
             ->assertSee('A database profile with these exact connection details already exists.');
+    }
+
+    public function test_passes_ssl_options_to_the_checker_and_stores_them(): void
+    {
+        $pem = TestCertificate::pem();
+
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')
+            ->once()
+            ->withArgs(fn (...$args) => ($args['options'] ?? $args[6] ?? null) === ['ssl' => ['mode' => 'verify-full', 'ca' => trim($pem)]])
+            ->andReturn(PermissionCheckResult::success(['Read access verified']));
+
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Managed PG')
+            ->set('driver', 'pgsql')
+            ->set('host', 'db.example.com')
+            ->set('database', 'app')
+            ->set('username', 'adbm_ro')
+            ->set('sslMode', 'verify-full')
+            ->set('sslCa', $pem)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $project = Project::sole();
+        $this->assertSame('verify-full', $project->options['ssl']['mode']);
+        $this->assertSame(trim($pem), $project->options['ssl']['ca']);
+    }
+
+    public function test_rejects_an_invalid_ca_certificate(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldNotReceive('check');
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Managed PG')
+            ->set('database', 'app')
+            ->set('sslMode', 'verify-ca')
+            ->set('sslCa', 'not a certificate')
+            ->call('save')
+            ->assertHasErrors(['sslCa']);
+
+        $this->assertDatabaseEmpty('projects');
+    }
+
+    public function test_managed_provider_hosts_default_to_require(): void
+    {
+        Livewire::test(CreateProjectModal::class)
+            ->assertSet('sslMode', 'prefer')
+            ->set('host', 'db.abcdefgh.supabase.co')
+            ->assertSet('sslMode', 'require');
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('sslMode', 'disable')
+            ->set('host', 'mydb.abc123.ap-southeast-1.rds.amazonaws.com')
+            ->assertSet('sslMode', 'disable');
     }
 }

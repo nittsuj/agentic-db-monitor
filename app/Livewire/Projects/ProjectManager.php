@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire\Projects;
 
 use App\Enums\DbDriver;
+use App\Livewire\Forms\ConnectionSslFields;
 use App\Models\Project;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
@@ -17,6 +18,8 @@ use Livewire\Component;
  */
 class ProjectManager extends Component
 {
+    use ConnectionSslFields;
+
     public ?string $projectId = null;
 
     public string $name = '';
@@ -51,6 +54,7 @@ class ProjectManager extends Component
         $this->database = $project->database;
         $this->username = $project->username;
         $this->password = '';
+        $this->fillSslFrom($project);
         $this->confirmingDelete = false;
         $this->errorMessage = null;
         $this->notice = null;
@@ -80,7 +84,7 @@ class ProjectManager extends Component
             'database' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255'],
             'password' => ['nullable', 'string'],
-        ];
+        ] + $this->sslRules();
     }
 
     public function save(): void
@@ -113,6 +117,7 @@ class ProjectManager extends Component
             'port' => $this->port,
             'database' => $this->database,
             'username' => $this->username,
+            'options' => $this->sslOptions($project->options ?? []),
         ];
 
         // An empty password field keeps the stored credential.

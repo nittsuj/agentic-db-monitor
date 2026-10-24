@@ -20,6 +20,36 @@ class ProjectManagerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_edits_ssl_settings_and_keeps_other_options(): void
+    {
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => ['source' => 'demo-seeder', 'ssl' => ['mode' => 'require', 'ca' => null]],
+        ]);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->assertSet('sslMode', 'require')
+            ->assertSet('sslCa', '')
+            ->set('sslMode', 'disable')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $project->refresh();
+
+        $this->assertSame('disable', $project->options['ssl']['mode']);
+        $this->assertSame('demo-seeder', $project->options['source']);
+    }
+
+    public function test_projects_without_ssl_options_edit_as_prefer(): void
+    {
+        $project = Project::factory()->create(['options' => []]);
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->assertSet('sslMode', 'prefer');
+    }
+
     public function test_lists_the_projects(): void
     {
         Project::factory()->create(['name' => 'Produksi MySQL']);

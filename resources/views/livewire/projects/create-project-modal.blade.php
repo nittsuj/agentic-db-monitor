@@ -54,7 +54,7 @@
                 <div class="od-row" style="gap:12px;align-items:flex-end">
                     <div class="od-stack" style="gap:6px;flex:1 1 0">
                         <label class="label" for="cp-host">Host</label>
-                        <input id="cp-host" class="input" type="text" wire:model="host" placeholder="127.0.0.1" required>
+                        <input id="cp-host" class="input" type="text" wire:model.blur="host" placeholder="127.0.0.1" required>
                     </div>
 
                     <div class="od-stack" style="gap:6px;flex:1 1 0">
@@ -74,6 +74,8 @@
                         <input id="cp-password" class="input" type="password" wire:model="password" placeholder="••••••••">
                     </div>
                 </div>
+
+                @include('livewire.projects.partials.ssl-fields', ['prefix' => 'cp'])
 
                 <div class="od-row" style="gap:8px;justify-content:flex-end;border-top:1px solid var(--adbm-border);padding-top:14px">
                     <flux:modal.close>
