@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Enums\DbDriver;
 use App\Enums\PrivilegeLevel;
 use App\Services\Database\PermissionChecker;
 use App\Services\Database\PermissionCheckResult;
 use App\Services\Database\TargetConnectionManager;
+use Illuminate\Database\ConnectionInterface;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 class PermissionCheckerClassificationTest extends TestCase
 {
@@ -95,6 +98,27 @@ class PermissionCheckerClassificationTest extends TestCase
     {
         $this->assertSame(PrivilegeLevel::ReadOnly, $this->checker->classifyPgRole($this->role())[0]);
         $this->assertSame(PrivilegeLevel::Unknown, $this->checker->classifyPgRole(null)[0]);
+    }
+
+    public function test_an_empty_password_gets_a_plain_message(): void
+    {
+        $manager = new class extends TargetConnectionManager
+        {
+            public function connectTemporary(DbDriver $driver, string $host, int $port, string $database, string $username, string $password, array $options = []): ConnectionInterface
+            {
+                throw new RuntimeException('SQLSTATE[08006] [7] connection to server failed: fe_sendauth: no password supplied');
+            }
+        };
+
+        $checker = new PermissionChecker($manager);
+
+        $empty = $checker->check(DbDriver::PgSql, 'db', 5432, 'app', 'adbm_ro', '');
+        $this->assertStringContainsString('Password database kosong', (string) $empty->errorMessage);
+        $this->assertStringContainsString("'adbm_ro'", (string) $empty->errorMessage);
+
+        // A typed password keeps the driver's own message.
+        $typed = $checker->check(DbDriver::PgSql, 'db', 5432, 'app', 'adbm_ro', 'x');
+        $this->assertStringStartsWith('Connection failed: ', (string) $typed->errorMessage);
     }
 
     public function test_review_is_needed_for_warnings_or_admin_only(): void

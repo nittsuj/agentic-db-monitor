@@ -71,6 +71,12 @@ class PermissionChecker
                 DbDriver::PgSql => $this->checkPgSql($connection),
             };
         } catch (Throwable $e) {
+            if ($password === '' && str_contains($e->getMessage(), 'no password supplied')) {
+                return PermissionCheckResult::failure(
+                    errorMessage: "Password database kosong. Server meminta password untuk user '{$username}'; isi kolom Password lalu coba lagi.",
+                );
+            }
+
             return PermissionCheckResult::failure(
                 errorMessage: 'Connection failed: '.$e->getMessage(),
             );
