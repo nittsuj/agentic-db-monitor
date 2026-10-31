@@ -109,6 +109,37 @@ class SshTunnelTest extends TestCase
         $this->assertSame(['known_hosts'], array_map(fn ($f) => $f->getFilename(), File::files($this->directory)));
     }
 
+    public function test_state_directory_is_created_with_private_permissions(): void
+    {
+        $file = (new SshTunnelManager('ssh', $this->directory.'/nested/ssh'))->knownHostsFile();
+
+        $this->assertFileExists($file);
+        $this->assertSame(0700, fileperms($this->directory.'/nested/ssh') & 0777);
+    }
+
+    public function test_state_directory_that_already_exists_is_reused(): void
+    {
+        mkdir($this->directory, 0700, true);
+        file_put_contents($this->directory.'/known_hosts', "bastion ssh-ed25519 AAAA\n");
+
+        $file = (new SshTunnelManager('ssh', $this->directory))->knownHostsFile();
+
+        $this->assertSame("bastion ssh-ed25519 AAAA\n", file_get_contents($file));
+    }
+
+    public function test_state_directory_that_cannot_be_created_fails_with_a_clear_error(): void
+    {
+        // A regular file in the way makes mkdir() fail for a reason other
+        // than a concurrent create.
+        mkdir($this->directory, 0700, true);
+        touch($this->directory.'/blocker');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Cannot create the SSH state directory');
+
+        (new SshTunnelManager('ssh', $this->directory.'/blocker/ssh'))->knownHostsFile();
+    }
+
     public function test_open_rejects_incomplete_settings_before_starting_ssh(): void
     {
         $manager = new SshTunnelManager('ssh', $this->directory);

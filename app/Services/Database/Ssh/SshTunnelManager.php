@@ -227,8 +227,13 @@ class SshTunnelManager
     {
         $directory = $this->stateDirectory ?? (string) env('ADBM_SSH_STATE_DIR', storage_path('app/private/ssh'));
 
-        if (! is_dir($directory)) {
-            mkdir($directory, 0700, true);
+        // Two processes (the collector and a "Test connection" click) can both
+        // see the directory missing on a fresh volume. The loser's mkdir() then
+        // fails with "File exists", which is fine as long as it now exists, so
+        // the warning is silenced and only a directory that truly cannot be
+        // created is an error.
+        if (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
+            throw new RuntimeException("Cannot create the SSH state directory {$directory}.");
         }
 
         return $directory;
