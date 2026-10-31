@@ -102,16 +102,9 @@ class ProjectManager extends Component
         $project = Project::findOrFail($this->projectId);
         $dbDriver = DbDriver::from($this->driver);
 
-        $duplicate = Project::query()
-            ->where('driver', $dbDriver)
-            ->where('host', $this->host)
-            ->where('port', $this->port)
-            ->where('database', $this->database)
-            ->where('username', $this->username)
-            ->whereKeyNot($project->id)
-            ->exists();
+        $duplicate = Project::findDuplicate($dbDriver, $this->host, $this->port, $this->database, $this->username, ignoreId: $project->id);
 
-        if ($duplicate) {
+        if ($duplicate !== null) {
             $this->errorMessage = 'A database profile with these exact connection details already exists.';
 
             return;
