@@ -128,6 +128,12 @@ trait ConnectionSshFields
             ? SshTunnelConfig::encrypt($typed)
             : ($stored[$field] ?? null);
 
+        // The secrets of the method that is not selected are kept as stored
+        // (the fields are hidden, so nothing new can be typed into them), so
+        // trying the other method and switching back does not lose the key or
+        // password. Only the selected method's secret is ever handed to ssh.
+        $usesKey = $this->sshAuth === 'key';
+
         return array_merge($existing, [
             'ssh' => [
                 'enabled' => true,
@@ -135,9 +141,9 @@ trait ConnectionSshFields
                 'port' => $this->sshPort,
                 'username' => trim($this->sshUsername),
                 'auth' => $this->sshAuth,
-                'private_key' => $this->sshAuth === 'key' ? $secret('private_key', trim($this->sshPrivateKey)) : null,
-                'passphrase' => $this->sshAuth === 'key' ? $secret('passphrase', $this->sshPassphrase) : null,
-                'password' => $this->sshAuth === 'password' ? $secret('password', $this->sshPassword) : null,
+                'private_key' => $usesKey ? $secret('private_key', trim($this->sshPrivateKey)) : ($stored['private_key'] ?? null),
+                'passphrase' => $usesKey ? $secret('passphrase', $this->sshPassphrase) : ($stored['passphrase'] ?? null),
+                'password' => $usesKey ? ($stored['password'] ?? null) : $secret('password', $this->sshPassword),
             ],
         ]);
     }

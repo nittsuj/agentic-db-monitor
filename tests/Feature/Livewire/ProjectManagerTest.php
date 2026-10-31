@@ -124,6 +124,59 @@ class ProjectManagerTest extends TestCase
         $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
     }
 
+    public function test_switching_ssh_auth_method_and_back_keeps_both_secrets(): void
+    {
+        $key = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----";
+
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => ['ssh' => [
+                'enabled' => true,
+                'host' => 'bastion',
+                'port' => 22,
+                'username' => 'tunnel',
+                'auth' => 'key',
+                'private_key' => SshTunnelConfig::encrypt($key),
+                'passphrase' => SshTunnelConfig::encrypt('phrase'),
+            ]],
+        ]);
+
+        $component = Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->set('sshAuth', 'password')
+            ->set('sshPassword', 'pw')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $ssh = $project->fresh()->options['ssh'];
+        $this->assertSame('password', $ssh['auth']);
+        $this->assertSame('pw', SshTunnelConfig::decrypt($ssh['password']));
+        $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
+        $this->assertSame('phrase', SshTunnelConfig::decrypt($ssh['passphrase']));
+
+        // Back to key auth without pasting the key again.
+        $component
+            ->assertSet('sshHasStoredKey', true)
+            ->set('sshAuth', 'key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $ssh = $project->fresh()->options['ssh'];
+        $this->assertSame('key', $ssh['auth']);
+        $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
+        $this->assertSame('phrase', SshTunnelConfig::decrypt($ssh['passphrase']));
+        $this->assertSame('pw', SshTunnelConfig::decrypt($ssh['password']));
+
+        // And to password auth again without retyping the password.
+        $component
+            ->assertSet('sshHasStoredPassword', true)
+            ->set('sshAuth', 'password')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('pw', SshTunnelConfig::decrypt($project->fresh()->options['ssh']['password']));
+    }
+
     public function test_disabling_ssh_keeps_the_stored_settings(): void
     {
         $project = Project::factory()->create([
