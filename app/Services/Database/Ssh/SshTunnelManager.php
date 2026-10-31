@@ -33,6 +33,11 @@ class SshTunnelManager
         $tempFiles = [];
         $environment = [];
 
+        // ssh logs to this file (-E) rather than stderr: with debug logging on
+        // it keeps writing for the life of the tunnel, and a stderr pipe that
+        // PHP stops draining would fill up and stall ssh.
+        $tempFiles[] = $logFile = $this->writePrivate('log', '');
+
         if ($config->auth === 'key') {
             $tempFiles[] = $keyFile = $this->writePrivate('key', $this->normalizeKey((string) $config->privateKey));
         }
@@ -57,6 +62,7 @@ class SshTunnelManager
             keyFile: $keyFile ?? null,
             interactive: $environment !== [],
             timeout: $timeout,
+            logFile: $logFile,
         );
 
         $process = new Process($command, null, $environment + ['LC_ALL' => 'C'], null, null);
@@ -66,18 +72,16 @@ class SshTunnelManager
 
         while (microtime(true) < $deadline) {
             if (! $process->isRunning()) {
+                $log = (string) @file_get_contents($logFile);
                 $this->cleanup($tempFiles);
 
-                throw new RuntimeException($this->explain($process->getErrorOutput(), $config));
+                throw new RuntimeException($this->explain($log."\n".$process->getErrorOutput(), $config));
             }
 
-            // ssh binds the forward only after authenticating, so an open
-            // port means the bastion accepted us.
-            $socket = @fsockopen('127.0.0.1', $localPort, $errno, $error, 0.2);
-
-            if ($socket !== false) {
-                fclose($socket);
-
+            // Read ssh's own account of the forward rather than probing the
+            // port: a probe can be answered by another process that holds the
+            // port, and it opens a channel to the database for nothing.
+            if ($this->forwardIsListening((string) @file_get_contents($logFile))) {
                 return new SshTunnel($localPort, $process, $tempFiles);
             }
 
@@ -101,6 +105,7 @@ class SshTunnelManager
         ?string $keyFile,
         bool $interactive,
         int $timeout = 10,
+        ?string $logFile = null,
     ): array {
         $command = [
             $this->binary ?? (string) config('services.ssh.binary', 'ssh'),
@@ -117,6 +122,11 @@ class SshTunnelManager
             '-o', 'NumberOfPasswordPrompts=1',
             '-F', 'none',
         ];
+
+        if ($logFile !== null) {
+            // debug1 is the lowest level that reports the forward's bind.
+            array_push($command, '-E', $logFile, '-o', 'LogLevel=DEBUG1');
+        }
 
         if ($config->auth === 'key') {
             array_push($command, '-i', (string) $keyFile, '-o', 'IdentitiesOnly=yes', '-o', 'PreferredAuthentications=publickey');
@@ -147,6 +157,7 @@ class SshTunnelManager
     public function explain(string $stderr, SshTunnelConfig $config): string
     {
         $where = "{$config->username}@{$config->host}:{$config->port}";
+        $stderr = $this->withoutProgressLines($stderr);
 
         return match (true) {
             str_contains($stderr, 'REMOTE HOST IDENTIFICATION HAS CHANGED'),
@@ -157,9 +168,36 @@ class SshTunnelManager
             str_contains($stderr, 'timed out') => "SSH connection to {$config->host}:{$config->port} timed out.",
             str_contains($stderr, 'invalid format'),
             str_contains($stderr, 'error in libcrypto') => 'The SSH private key could not be read. Paste the full key including the BEGIN/END lines.',
+            str_contains($stderr, 'cannot listen to port'),
+            str_contains($stderr, 'Could not request local forwarding') => 'The local port picked for the SSH tunnel was taken by another process. Try again.',
             str_contains($stderr, 'forwarding failed') => "The bastion refused to forward the database port (AllowTcpForwarding may be off on {$config->host}).",
             default => 'SSH tunnel failed: '.(trim($stderr) !== '' ? trim(last(preg_split('/\R/', trim($stderr)))) : 'ssh exited without an error message.'),
         };
+    }
+
+    /**
+     * ssh logs "Local forwarding listening on ..." before it binds, even when
+     * the bind then fails; the port-listener channel only exists once the bind
+     * succeeded (checked against OpenSSH 10.0p2).
+     */
+    protected function forwardIsListening(string $log): bool
+    {
+        return str_contains($log, 'new port-listener')
+            && ! str_contains($log, 'cannot listen to port');
+    }
+
+    /**
+     * Drop debug and routine lines, so explain() matches and reports what
+     * actually went wrong.
+     */
+    protected function withoutProgressLines(string $log): string
+    {
+        $lines = array_filter(
+            preg_split('/\R/', $log) ?: [],
+            fn (string $line): bool => ! preg_match('/^(debug\d: |Authenticated to |Warning: Permanently added |Transferred: |Bytes per second: )/', $line),
+        );
+
+        return implode("\n", $lines);
     }
 
     protected function assertUsable(SshTunnelConfig $config): void
