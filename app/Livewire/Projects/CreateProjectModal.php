@@ -129,7 +129,8 @@ class CreateProjectModal extends Component
 
     protected function store(DbDriver $dbDriver): void
     {
-        $existing = Project::findDuplicate($dbDriver, $this->host, $this->port, $this->database, $this->username);
+        $options = $this->connectionOptions();
+        $existing = Project::findDuplicate($dbDriver, $this->host, $this->port, $this->database, $this->username, $options);
 
         if ($existing !== null) {
             $this->errorMessage = 'A database profile with these exact connection details already exists.';
@@ -145,7 +146,7 @@ class CreateProjectModal extends Component
             'database' => $this->database,
             'username' => $this->username,
             'password' => $this->password,
-            'options' => $this->connectionOptions(),
+            'options' => $options,
             'is_active' => true,
         ]);
 

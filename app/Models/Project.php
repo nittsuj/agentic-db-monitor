@@ -43,7 +43,11 @@ class Project extends Model
 
     /**
      * Another profile with the same connection details, so it points at the
-     * same database. $ignoreId leaves out the profile being edited.
+     * same database. Behind an SSH tunnel the host is resolved by the bastion,
+     * so profiles behind different bastions are different databases.
+     * $ignoreId leaves out the profile being edited.
+     *
+     * @param  array<string, mixed>|null  $options  projects.options of the profile being saved
      */
     public static function findDuplicate(
         DbDriver $driver,
@@ -51,8 +55,11 @@ class Project extends Model
         int $port,
         string $database,
         string $username,
+        ?array $options = [],
         ?string $ignoreId = null,
     ): ?self {
+        $bastion = static::sshIdentity($options);
+
         return static::query()
             ->where('driver', $driver)
             ->where('host', $host)
@@ -60,7 +67,26 @@ class Project extends Model
             ->where('database', $database)
             ->where('username', $username)
             ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
-            ->first();
+            ->get()
+            ->first(fn (self $project): bool => static::sshIdentity($project->options) === $bastion);
+    }
+
+    /**
+     * The bastion part of a profile's identity: SSH host, port and username
+     * when SSH is enabled, empty otherwise. Must match the expression in the
+     * projects_connection_unique index.
+     *
+     * @param  array<string, mixed>|null  $options
+     */
+    public static function sshIdentity(?array $options): string
+    {
+        $ssh = $options['ssh'] ?? null;
+
+        if (! is_array($ssh) || ($ssh['enabled'] ?? null) !== true) {
+            return '';
+        }
+
+        return ($ssh['host'] ?? '').':'.($ssh['port'] ?? '').':'.($ssh['username'] ?? '');
     }
 
     /**

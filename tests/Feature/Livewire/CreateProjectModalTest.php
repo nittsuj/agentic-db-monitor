@@ -279,6 +279,72 @@ class CreateProjectModalTest extends TestCase
         $this->assertSame($key, SshTunnelConfig::decrypt($ssh['private_key']));
     }
 
+    /**
+     * Fill the form for the documented "database on the bastion itself" setup:
+     * the database host is 127.0.0.1 as seen from the bastion.
+     */
+    protected function createBehindBastion(string $bastion): void
+    {
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', "App on {$bastion}")
+            ->set('driver', 'mysql')
+            ->set('host', '127.0.0.1')
+            ->set('port', 3306)
+            ->set('database', 'app')
+            ->set('username', 'root')
+            ->set('sslMode', 'disable')
+            ->set('sshEnabled', true)
+            ->set('sshHost', $bastion)
+            ->set('sshUsername', 'tunnel')
+            ->set('sshAuth', 'password')
+            ->set('sshPassword', 'pw')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('errorMessage', null);
+    }
+
+    public function test_same_database_details_behind_different_bastions_are_separate_profiles(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')->twice()->andReturn(PermissionCheckResult::success());
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        $this->createBehindBastion('bastion-a.example.com');
+        $this->createBehindBastion('bastion-b.example.com');
+
+        $this->assertSame(
+            ['bastion-a.example.com', 'bastion-b.example.com'],
+            Project::all()->map(fn (Project $p) => $p->options['ssh']['host'])->sort()->values()->all(),
+        );
+    }
+
+    public function test_same_database_details_behind_the_same_bastion_are_still_a_duplicate(): void
+    {
+        $mockChecker = Mockery::mock(PermissionChecker::class);
+        $mockChecker->shouldReceive('check')->twice()->andReturn(PermissionCheckResult::success());
+        $this->app->instance(PermissionChecker::class, $mockChecker);
+
+        $this->createBehindBastion('bastion-a.example.com');
+
+        Livewire::test(CreateProjectModal::class)
+            ->set('name', 'Again')
+            ->set('driver', 'mysql')
+            ->set('host', '127.0.0.1')
+            ->set('port', 3306)
+            ->set('database', 'app')
+            ->set('username', 'root')
+            ->set('sslMode', 'disable')
+            ->set('sshEnabled', true)
+            ->set('sshHost', 'bastion-a.example.com')
+            ->set('sshUsername', 'tunnel')
+            ->set('sshAuth', 'password')
+            ->set('sshPassword', 'pw')
+            ->call('save')
+            ->assertSet('errorMessage', 'A database profile with these exact connection details already exists.');
+
+        $this->assertSame(1, Project::count());
+    }
+
     public function test_ssh_requires_a_key_and_rejects_hostname_verification(): void
     {
         $mockChecker = Mockery::mock(PermissionChecker::class);
