@@ -36,6 +36,8 @@ trait ConnectionSshFields
 
     public bool $sshHasStoredKey = false;
 
+    public bool $sshHasStoredPassphrase = false;
+
     public bool $sshHasStoredPassword = false;
 
     /**
@@ -133,6 +135,16 @@ trait ConnectionSshFields
         // trying the other method and switching back does not lose the key or
         // password. Only the selected method's secret is ever handed to ssh.
         $usesKey = $this->sshAuth === 'key';
+        $newKey = trim($this->sshPrivateKey);
+
+        // A passphrase belongs to one key. When a new key is pasted, the
+        // passphrase field describes that key: typed replaces, empty means the
+        // new key has none. Without a new key, empty keeps the stored one.
+        $passphrase = match (true) {
+            ! $usesKey => $stored['passphrase'] ?? null,
+            $newKey !== '' => SshTunnelConfig::encrypt($this->sshPassphrase),
+            default => $secret('passphrase', $this->sshPassphrase),
+        };
 
         return array_merge($existing, [
             'ssh' => [
@@ -141,8 +153,8 @@ trait ConnectionSshFields
                 'port' => $this->sshPort,
                 'username' => trim($this->sshUsername),
                 'auth' => $this->sshAuth,
-                'private_key' => $usesKey ? $secret('private_key', trim($this->sshPrivateKey)) : ($stored['private_key'] ?? null),
-                'passphrase' => $usesKey ? $secret('passphrase', $this->sshPassphrase) : ($stored['passphrase'] ?? null),
+                'private_key' => $usesKey ? $secret('private_key', $newKey) : ($stored['private_key'] ?? null),
+                'passphrase' => $passphrase,
                 'password' => $usesKey ? ($stored['password'] ?? null) : $secret('password', $this->sshPassword),
             ],
         ]);
@@ -161,6 +173,7 @@ trait ConnectionSshFields
         $this->sshPassphrase = '';
         $this->sshPassword = '';
         $this->sshHasStoredKey = ! empty($ssh['private_key']);
+        $this->sshHasStoredPassphrase = ! empty($ssh['passphrase']);
         $this->sshHasStoredPassword = ! empty($ssh['password']);
     }
 

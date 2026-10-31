@@ -47,7 +47,10 @@
             <div class="od-stack" style="gap:6px">
                 <label class="label" for="{{ $prefix }}-ssh-passphrase">Passphrase key (opsional)</label>
                 <input id="{{ $prefix }}-ssh-passphrase" class="input" type="password" wire:model="sshPassphrase"
-                    placeholder="{{ $sshHasStoredKey ? '•••••••• (kosongkan untuk mempertahankan)' : '' }}">
+                    placeholder="{{ $sshHasStoredPassphrase ? '•••••••• (kosongkan untuk mempertahankan)' : '' }}">
+                @if ($sshHasStoredKey)
+                    <span class="muted small">Jika private key baru ditempel, isi passphrase key baru itu; kosongkan bila key baru tidak memakai passphrase.</span>
+                @endif
             </div>
         @else
             <div class="od-stack" style="gap:6px">

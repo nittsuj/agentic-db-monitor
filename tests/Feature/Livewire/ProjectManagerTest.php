@@ -177,6 +177,91 @@ class ProjectManagerTest extends TestCase
         $this->assertSame('pw', SshTunnelConfig::decrypt($project->fresh()->options['ssh']['password']));
     }
 
+    protected function projectWithStoredKey(?string $passphrase): Project
+    {
+        return Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => ['ssh' => [
+                'enabled' => true,
+                'host' => 'bastion',
+                'port' => 22,
+                'username' => 'tunnel',
+                'auth' => 'key',
+                'private_key' => SshTunnelConfig::encrypt("-----BEGIN OPENSSH PRIVATE KEY-----\nold\n-----END OPENSSH PRIVATE KEY-----"),
+                'passphrase' => SshTunnelConfig::encrypt($passphrase),
+            ]],
+        ]);
+    }
+
+    public function test_new_key_without_a_passphrase_clears_the_stored_passphrase(): void
+    {
+        $project = $this->projectWithStoredKey('old-phrase');
+        $newKey = "-----BEGIN OPENSSH PRIVATE KEY-----\nnew\n-----END OPENSSH PRIVATE KEY-----";
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->assertSet('sshHasStoredPassphrase', true)
+            ->set('sshPrivateKey', $newKey)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('sshHasStoredPassphrase', false);
+
+        $ssh = $project->fresh()->options['ssh'];
+        $this->assertSame($newKey, SshTunnelConfig::decrypt($ssh['private_key']));
+        $this->assertNull($ssh['passphrase']);
+    }
+
+    public function test_new_key_with_a_passphrase_replaces_the_stored_passphrase(): void
+    {
+        $project = $this->projectWithStoredKey('old-phrase');
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->set('sshPrivateKey', "-----BEGIN OPENSSH PRIVATE KEY-----\nnew\n-----END OPENSSH PRIVATE KEY-----")
+            ->set('sshPassphrase', 'new-phrase')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('new-phrase', SshTunnelConfig::decrypt($project->fresh()->options['ssh']['passphrase']));
+    }
+
+    public function test_empty_passphrase_without_a_new_key_keeps_the_stored_one(): void
+    {
+        $project = $this->projectWithStoredKey('old-phrase');
+
+        Livewire::test(ProjectManager::class)
+            ->call('edit', $project->id)
+            ->set('sshHost', 'other-bastion')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('old-phrase', SshTunnelConfig::decrypt($project->fresh()->options['ssh']['passphrase']));
+    }
+
+    public function test_passphrase_placeholder_only_claims_a_stored_passphrase_when_there_is_one(): void
+    {
+        // The database password field uses the same placeholder text, so look
+        // at the passphrase input itself.
+        $passphrasePlaceholder = function (string $html): ?string {
+            preg_match('/<input[^>]*id="[^"]*-ssh-passphrase"[^>]*placeholder="([^"]*)"/', $html, $match);
+
+            return $match[1] ?? null;
+        };
+
+        $withoutPassphrase = Livewire::test(ProjectManager::class)
+            ->call('edit', $this->projectWithStoredKey(null)->id)
+            ->assertSet('sshHasStoredKey', true)
+            ->assertSet('sshHasStoredPassphrase', false);
+
+        $this->assertSame('', $passphrasePlaceholder($withoutPassphrase->html()));
+
+        $withPassphrase = Livewire::test(ProjectManager::class)
+            ->call('edit', $this->projectWithStoredKey('phrase')->id)
+            ->assertSet('sshHasStoredPassphrase', true);
+
+        $this->assertSame('•••••••• (kosongkan untuk mempertahankan)', $passphrasePlaceholder($withPassphrase->html()));
+    }
+
     public function test_disabling_ssh_keeps_the_stored_settings(): void
     {
         $project = Project::factory()->create([
