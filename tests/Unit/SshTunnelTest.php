@@ -7,7 +7,9 @@ namespace Tests\Unit;
 use App\Services\Database\Ssh\SshTunnelConfig;
 use App\Services\Database\Ssh\SshTunnelManager;
 use Illuminate\Support\Facades\File;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class SshTunnelTest extends TestCase
@@ -421,6 +423,53 @@ class SshTunnelTest extends TestCase
 
         $this->assertSame('/usr/local/bin/ssh', $command[0]);
         $this->assertSame($this->directory.'/explicit/known_hosts', $manager->knownHostsFile());
+    }
+
+    /**
+     * Expose askpassScript() so the Windows script can be built on any OS.
+     */
+    protected function askpassManager(): SshTunnelManager
+    {
+        return new class('ssh', $this->directory) extends SshTunnelManager
+        {
+            public function askpassFor(string $osFamily): string
+            {
+                return $this->askpassScript($osFamily);
+            }
+        };
+    }
+
+    public function test_windows_askpass_prints_the_secret_without_letting_cmd_parse_it(): void
+    {
+        $script = $this->askpassManager()->askpassFor('Windows');
+
+        $this->assertStringEndsWith('.cmd', $script);
+        $this->assertSame(
+            "@echo off\r\nsetlocal EnableDelayedExpansion\r\necho(!ADBM_SSH_SECRET!\r\n",
+            file_get_contents($script),
+        );
+        $this->assertStringNotContainsString('%ADBM_SSH_SECRET%', file_get_contents($script));
+    }
+
+    /**
+     * @return list<array{0: string}>
+     */
+    public static function awkwardSecrets(): array
+    {
+        return [
+            ['p&ss'], ['a|b'], ['x>y<z'], ['car^et'], ['bang!s!'], ['%PATH%'], ['"quoted"'], ['off'], ['/?'], ['  spaced  '], ['plain'],
+        ];
+    }
+
+    #[DataProvider('awkwardSecrets')]
+    public function test_askpass_prints_awkward_secrets_exactly(string $secret): void
+    {
+        $script = $this->askpassManager()->askpassFor(PHP_OS_FAMILY);
+        $process = new Process([$script], null, ['ADBM_SSH_SECRET' => $secret]);
+        $process->mustRun();
+
+        // ssh strips the line ending from askpass output.
+        $this->assertSame($secret, rtrim($process->getOutput(), "\r\n"));
     }
 
     public function test_open_rejects_incomplete_settings_before_starting_ssh(): void

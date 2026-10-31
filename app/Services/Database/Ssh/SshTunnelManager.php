@@ -281,10 +281,17 @@ class SshTunnelManager
         return trim(str_replace("\r\n", "\n", $key))."\n";
     }
 
-    protected function askpassScript(): string
+    /**
+     * A script ssh runs to read the secret from ADBM_SSH_SECRET.
+     */
+    protected function askpassScript(string $osFamily = PHP_OS_FAMILY): string
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return $this->writePrivate('askpass', "@echo off\r\necho %ADBM_SSH_SECRET%\r\n", '.cmd');
+        if ($osFamily === 'Windows') {
+            // cmd parses %VAR% after expanding it, so & | < > ^ in a password
+            // would break the line or run as commands. !VAR! (delayed
+            // expansion) is expanded after parsing, so the value is printed
+            // as is. "echo(" also prints values like "off" or "/?" literally.
+            return $this->writePrivate('askpass', "@echo off\r\nsetlocal EnableDelayedExpansion\r\necho(!ADBM_SSH_SECRET!\r\n", '.cmd');
         }
 
         $file = $this->writePrivate('askpass', "#!/bin/sh\nprintf '%s\\n' \"\$ADBM_SSH_SECRET\"\n");
