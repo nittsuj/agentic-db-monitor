@@ -159,8 +159,17 @@ class TargetConnectionManagerTest extends TestCase
      */
     protected function sshOptionsWithUnsatisfiableCa(): array
     {
+        return $this->sshOptions(['mode' => 'verify-ca']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $ssl
+     * @return array<string, mixed>
+     */
+    protected function sshOptions(array $ssl): array
+    {
         return [
-            'ssl' => ['mode' => 'verify-ca'],
+            'ssl' => $ssl,
             'ssh' => [
                 'enabled' => true,
                 'host' => 'bastion.example.com',
@@ -213,6 +222,64 @@ class TargetConnectionManagerTest extends TestCase
         }
 
         $this->assertFileDoesNotExist($marker);
+    }
+
+    /**
+     * A tunnel manager that records the timeout of every open().
+     */
+    protected function timeoutRecordingTunnels(): SshTunnelManager
+    {
+        return new class extends SshTunnelManager
+        {
+            /** @var list<int> */
+            public array $timeouts = [];
+
+            public function open(SshTunnelConfig $config, string $remoteHost, int $remotePort, int $timeout = 10): SshTunnel
+            {
+                $this->timeouts[] = $timeout;
+
+                return new SshTunnel(45678, null);
+            }
+        };
+    }
+
+    public function test_connect_opens_the_tunnel_with_the_fail_fast_timeout(): void
+    {
+        $tunnels = $this->timeoutRecordingTunnels();
+        $this->manager = new TargetConnectionManager($this->store(null), $tunnels);
+
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => $this->sshOptions(['mode' => 'prefer']),
+        ]);
+
+        $this->manager->connect($project);
+        $name = $this->manager->connectionName($project);
+
+        $this->assertSame([5], $tunnels->timeouts);
+        $this->assertSame(5, Config::get("database.connections.{$name}.options")[PDO::ATTR_TIMEOUT]);
+
+        $this->manager->purge($name);
+    }
+
+    public function test_temporary_connection_opens_the_tunnel_with_the_fail_fast_timeout(): void
+    {
+        $tunnels = $this->timeoutRecordingTunnels();
+        $this->manager = new TargetConnectionManager($this->store(null), $tunnels);
+
+        $connection = $this->manager->connectTemporary(
+            driver: DbDriver::MySql,
+            host: 'db.internal',
+            port: 3306,
+            database: 'app',
+            username: 'app',
+            password: 'secret',
+            options: $this->sshOptions(['mode' => 'disable']),
+        );
+
+        $this->assertSame([5], $tunnels->timeouts);
+
+        $this->manager->purge($connection->getName());
     }
 
     public function test_pgsql_defaults_to_prefer_without_ssl_options(): void

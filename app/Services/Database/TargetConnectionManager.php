@@ -31,6 +31,14 @@ class TargetConnectionManager
      */
     protected static array $openTunnels = [];
 
+    /**
+     * Seconds to wait for the SSH tunnel and, separately, for the database.
+     * Chat, the collector and the pre-flight run inside a web/scheduler
+     * request, so an unreachable target must fail fast rather than hold the
+     * worker.
+     */
+    protected const CONNECT_TIMEOUT = 5;
+
     public function __construct(?CaCertificateStore $certificates = null, ?SshTunnelManager $tunnels = null)
     {
         $this->certificates = $certificates ?? new CaCertificateStore;
@@ -53,7 +61,7 @@ class TargetConnectionManager
     public function connect(Project $project): ConnectionInterface
     {
         $name = $this->connectionName($project);
-        [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? []);
+        [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? [], static::CONNECT_TIMEOUT);
 
         $config = $this->closingTunnelOnFailure($name, fn (): array => $this->buildConfig(
             driver: $project->driver,
@@ -63,9 +71,7 @@ class TargetConnectionManager
             username: $project->username,
             password: $project->password,
             options: $project->options ?? [],
-            // Chat and the collector run inside a web/scheduler request, so an
-            // unreachable target must fail fast rather than hold the worker.
-            timeout: 5,
+            timeout: static::CONNECT_TIMEOUT,
         ));
 
         Config::set("database.connections.{$name}", $config);
@@ -88,7 +94,7 @@ class TargetConnectionManager
         array $options = [],
     ): ConnectionInterface {
         $tempName = 'target_temp_verify_'.uniqid();
-        [$host, $port] = $this->endpoint($tempName, $host, $port, $options);
+        [$host, $port] = $this->endpoint($tempName, $host, $port, $options, static::CONNECT_TIMEOUT);
 
         $config = $this->closingTunnelOnFailure($tempName, fn (): array => $this->buildConfig(
             driver: $driver,
@@ -98,7 +104,7 @@ class TargetConnectionManager
             username: $username,
             password: $password,
             options: $options,
-            timeout: 5,
+            timeout: static::CONNECT_TIMEOUT,
         ));
 
         Config::set("database.connections.{$tempName}", $config);
@@ -154,7 +160,7 @@ class TargetConnectionManager
      * @param  array<string, mixed>  $options
      * @return array{0: string, 1: int}
      */
-    protected function endpoint(string $connectionName, string $host, int $port, array $options): array
+    protected function endpoint(string $connectionName, string $host, int $port, array $options, int $timeout): array
     {
         $ssh = SshTunnelConfig::fromOptions($options);
 
@@ -176,7 +182,7 @@ class TargetConnectionManager
             password: $ssh->password,
         );
 
-        $tunnel = $this->tunnels->open($bastion, $host, $port);
+        $tunnel = $this->tunnels->open($bastion, $host, $port, $timeout);
         static::$openTunnels[$connectionName] = $tunnel;
 
         return ['127.0.0.1', $tunnel->localPort];
