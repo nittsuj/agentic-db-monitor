@@ -102,16 +102,10 @@ class ProjectManager extends Component
         $project = Project::findOrFail($this->projectId);
         $dbDriver = DbDriver::from($this->driver);
 
-        $duplicate = Project::query()
-            ->where('driver', $dbDriver)
-            ->where('host', $this->host)
-            ->where('port', $this->port)
-            ->where('database', $this->database)
-            ->where('username', $this->username)
-            ->whereKeyNot($project->id)
-            ->exists();
+        $options = $this->connectionOptions($project->options ?? []);
+        $duplicate = Project::findDuplicate($dbDriver, $this->host, $this->port, $this->database, $this->username, $options, ignoreId: $project->id);
 
-        if ($duplicate) {
+        if ($duplicate !== null) {
             $this->errorMessage = 'A database profile with these exact connection details already exists.';
 
             return;
@@ -124,7 +118,7 @@ class ProjectManager extends Component
             'port' => $this->port,
             'database' => $this->database,
             'username' => $this->username,
-            'options' => $this->connectionOptions($project->options ?? []),
+            'options' => $options,
         ];
 
         // An empty password field keeps the stored credential.

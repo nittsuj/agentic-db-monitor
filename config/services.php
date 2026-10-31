@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    /*
+    | OpenSSH client used for SSH tunnels to target databases. The state
+    | directory holds the pinned known_hosts file and short-lived key/askpass
+    | files; in Docker it must be on the /data volume so pinned host keys
+    | survive a rebuild (see compose.yaml).
+    */
+    'ssh' => [
+        'binary' => env('ADBM_SSH_BINARY', 'ssh'),
+        'state_dir' => env('ADBM_SSH_STATE_DIR', storage_path('app/private/ssh')),
+    ],
+
 ];

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use PDO;
 use RuntimeException;
+use Throwable;
 
 class TargetConnectionManager
 {
@@ -29,6 +30,14 @@ class TargetConnectionManager
      * @var array<string, SshTunnel>
      */
     protected static array $openTunnels = [];
+
+    /**
+     * Seconds to wait for the SSH tunnel and, separately, for the database.
+     * Chat, the collector and the pre-flight run inside a web/scheduler
+     * request, so an unreachable target must fail fast rather than hold the
+     * worker.
+     */
+    protected const CONNECT_TIMEOUT = 5;
 
     public function __construct(?CaCertificateStore $certificates = null, ?SshTunnelManager $tunnels = null)
     {
@@ -52,9 +61,9 @@ class TargetConnectionManager
     public function connect(Project $project): ConnectionInterface
     {
         $name = $this->connectionName($project);
-        [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? []);
+        [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? [], static::CONNECT_TIMEOUT);
 
-        $config = $this->buildConfig(
+        $config = $this->closingTunnelOnFailure($name, fn (): array => $this->buildConfig(
             driver: $project->driver,
             host: $host,
             port: $port,
@@ -62,10 +71,8 @@ class TargetConnectionManager
             username: $project->username,
             password: $project->password,
             options: $project->options ?? [],
-            // Chat and the collector run inside a web/scheduler request, so an
-            // unreachable target must fail fast rather than hold the worker.
-            timeout: 5,
-        );
+            timeout: static::CONNECT_TIMEOUT,
+        ));
 
         Config::set("database.connections.{$name}", $config);
 
@@ -87,9 +94,9 @@ class TargetConnectionManager
         array $options = [],
     ): ConnectionInterface {
         $tempName = 'target_temp_verify_'.uniqid();
-        [$host, $port] = $this->endpoint($tempName, $host, $port, $options);
+        [$host, $port] = $this->endpoint($tempName, $host, $port, $options, static::CONNECT_TIMEOUT);
 
-        $config = $this->buildConfig(
+        $config = $this->closingTunnelOnFailure($tempName, fn (): array => $this->buildConfig(
             driver: $driver,
             host: $host,
             port: $port,
@@ -97,8 +104,8 @@ class TargetConnectionManager
             username: $username,
             password: $password,
             options: $options,
-            timeout: 5,
-        );
+            timeout: static::CONNECT_TIMEOUT,
+        ));
 
         Config::set("database.connections.{$tempName}", $config);
 
@@ -113,9 +120,35 @@ class TargetConnectionManager
         DB::purge($connectionName);
         Config::set("database.connections.{$connectionName}", null);
 
+        $this->closeTunnel($connectionName);
+    }
+
+    protected function closeTunnel(string $connectionName): void
+    {
         if (isset(static::$openTunnels[$connectionName])) {
             static::$openTunnels[$connectionName]->close();
             unset(static::$openTunnels[$connectionName]);
+        }
+    }
+
+    /**
+     * The tunnel is opened before the config is built, because the config
+     * needs its local port. If building fails (e.g. no CA bundle), the caller
+     * never gets a connection name to purge, so close the tunnel here.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $build
+     * @return T
+     */
+    protected function closingTunnelOnFailure(string $connectionName, callable $build): mixed
+    {
+        try {
+            return $build();
+        } catch (Throwable $e) {
+            $this->closeTunnel($connectionName);
+
+            throw $e;
         }
     }
 
@@ -127,7 +160,7 @@ class TargetConnectionManager
      * @param  array<string, mixed>  $options
      * @return array{0: string, 1: int}
      */
-    protected function endpoint(string $connectionName, string $host, int $port, array $options): array
+    protected function endpoint(string $connectionName, string $host, int $port, array $options, int $timeout): array
     {
         $ssh = SshTunnelConfig::fromOptions($options);
 
@@ -149,7 +182,7 @@ class TargetConnectionManager
             password: $ssh->password,
         );
 
-        $tunnel = $this->tunnels->open($bastion, $host, $port);
+        $tunnel = $this->tunnels->open($bastion, $host, $port, $timeout);
         static::$openTunnels[$connectionName] = $tunnel;
 
         return ['127.0.0.1', $tunnel->localPort];
