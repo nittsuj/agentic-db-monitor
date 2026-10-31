@@ -23,20 +23,21 @@ class SshTunnelManager
     ) {}
 
     /**
+     * How many times to start ssh when the local port turns out to be taken.
+     * freePort() releases the port before ssh binds it, so another process
+     * can grab it in between; a fresh port almost always succeeds.
+     */
+    protected const PORT_ATTEMPTS = 2;
+
+    /**
      * @throws RuntimeException when ssh cannot authenticate or forward in time
      */
     public function open(SshTunnelConfig $config, string $remoteHost, int $remotePort, int $timeout = 10): SshTunnel
     {
         $this->assertUsable($config);
 
-        $localPort = $this->freePort();
         $tempFiles = [];
         $environment = [];
-
-        // ssh logs to this file (-E) rather than stderr: with debug logging on
-        // it keeps writing for the life of the tunnel, and a stderr pipe that
-        // PHP stops draining would fill up and stall ssh.
-        $tempFiles[] = $logFile = $this->writePrivate('log', '');
 
         if ($config->auth === 'key') {
             $tempFiles[] = $keyFile = $this->writePrivate('key', $this->normalizeKey((string) $config->privateKey));
@@ -54,44 +55,81 @@ class SshTunnelManager
             ];
         }
 
-        $command = $this->command(
-            config: $config,
-            localPort: $localPort,
-            remoteHost: $remoteHost,
-            remotePort: $remotePort,
-            keyFile: $keyFile ?? null,
-            interactive: $environment !== [],
-            timeout: $timeout,
-            logFile: $logFile,
-        );
-
-        $process = new Process($command, null, $environment + ['LC_ALL' => 'C'], null, null);
-        $process->start();
-
+        // One deadline for all attempts, so a retry never stretches the
+        // caller's timeout.
         $deadline = microtime(true) + $timeout;
 
+        try {
+            for ($attempt = 1; ; $attempt++) {
+                // ssh logs to this file (-E) rather than stderr: with debug
+                // logging on it keeps writing for the life of the tunnel, and a
+                // stderr pipe that PHP stops draining would fill up and stall ssh.
+                $logFile = $this->writePrivate('log', '');
+                $localPort = $this->freePort();
+
+                $command = $this->command(
+                    config: $config,
+                    localPort: $localPort,
+                    remoteHost: $remoteHost,
+                    remotePort: $remotePort,
+                    keyFile: $keyFile ?? null,
+                    interactive: $environment !== [],
+                    timeout: $timeout,
+                    logFile: $logFile,
+                );
+
+                $process = new Process($command, null, $environment + ['LC_ALL' => 'C'], null, null);
+                $process->start();
+
+                $failure = $this->awaitForward($process, $logFile, $deadline);
+
+                if ($failure === null) {
+                    return new SshTunnel($localPort, $process, [...$tempFiles, $logFile]);
+                }
+
+                $this->cleanup([$logFile]);
+
+                if ($failure === false) {
+                    throw new RuntimeException("SSH tunnel to {$config->host}:{$config->port} did not come up within {$timeout}s.");
+                }
+
+                if (! $this->localPortWasTaken($failure) || $attempt >= static::PORT_ATTEMPTS || microtime(true) >= $deadline) {
+                    throw new RuntimeException($this->explain($failure, $config));
+                }
+            }
+        } catch (RuntimeException $e) {
+            $this->cleanup($tempFiles);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Wait for ssh to report the forward.
+     *
+     * @return string|false|null null once the forward is up; ssh's log when it
+     *                           exited; false when the deadline passed (ssh is stopped)
+     */
+    protected function awaitForward(Process $process, string $logFile, float $deadline): string|false|null
+    {
         while (microtime(true) < $deadline) {
             if (! $process->isRunning()) {
-                $log = (string) @file_get_contents($logFile);
-                $this->cleanup($tempFiles);
-
-                throw new RuntimeException($this->explain($log."\n".$process->getErrorOutput(), $config));
+                return (string) @file_get_contents($logFile)."\n".$process->getErrorOutput();
             }
 
             // Read ssh's own account of the forward rather than probing the
             // port: a probe can be answered by another process that holds the
             // port, and it opens a channel to the database for nothing.
             if ($this->forwardIsListening((string) @file_get_contents($logFile))) {
-                return new SshTunnel($localPort, $process, $tempFiles);
+                return null;
             }
 
             usleep(100_000);
         }
 
         $process->stop(0);
-        $this->cleanup($tempFiles);
 
-        throw new RuntimeException("SSH tunnel to {$config->host}:{$config->port} did not come up within {$timeout}s.");
+        return false;
     }
 
     /**
@@ -183,7 +221,13 @@ class SshTunnelManager
     protected function forwardIsListening(string $log): bool
     {
         return str_contains($log, 'new port-listener')
-            && ! str_contains($log, 'cannot listen to port');
+            && ! $this->localPortWasTaken($log);
+    }
+
+    protected function localPortWasTaken(string $log): bool
+    {
+        return str_contains($log, 'cannot listen to port')
+            || str_contains($log, 'Could not request local forwarding');
     }
 
     /**

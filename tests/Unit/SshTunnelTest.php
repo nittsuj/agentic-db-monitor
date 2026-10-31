@@ -218,6 +218,114 @@ class SshTunnelTest extends TestCase
         $this->assertSame(['known_hosts'], $this->remainingFiles());
     }
 
+    /**
+     * A stand-in for ssh that fails like a real bind clash when its -L local
+     * port is one of $takenPorts, and comes up otherwise.
+     *
+     * @param  list<int>  $takenPorts
+     */
+    protected function fakeSshWithTakenPorts(array $takenPorts): string
+    {
+        File::ensureDirectoryExists($this->directory);
+        $script = $this->directory.'/fake-ssh-'.uniqid();
+        $taken = implode(' ', $takenPorts);
+        $up = self::LOG_FORWARD_UP;
+        $clash = self::LOG_PORT_TAKEN;
+
+        file_put_contents($script, <<<SH
+            #!/bin/sh
+            while [ \$# -gt 0 ]; do
+                [ "\$1" = "-E" ] && log="\$2"
+                [ "\$1" = "-L" ] && port=\$(echo "\$2" | cut -d: -f2)
+                shift
+            done
+            for t in {$taken}; do
+                if [ "\$port" = "\$t" ]; then
+                    cat >> "\$log" <<'EOF'
+            {$clash}
+            EOF
+                    exit 255
+                fi
+            done
+            cat >> "\$log" <<'EOF'
+            {$up}
+            EOF
+            exec sleep 30
+            SH);
+        chmod($script, 0755);
+
+        return $script;
+    }
+
+    /**
+     * @param  list<int>  $ports  handed out by freePort() in this order
+     */
+    protected function managerWithPorts(string $binary, array $ports): SshTunnelManager
+    {
+        return new class($binary, $this->directory, $ports) extends SshTunnelManager
+        {
+            /** @var list<int> */
+            public array $handedOut = [];
+
+            /**
+             * @param  list<int>  $ports
+             */
+            public function __construct(string $binary, string $directory, private array $ports)
+            {
+                parent::__construct($binary, $directory);
+            }
+
+            protected function freePort(): int
+            {
+                return $this->handedOut[] = array_shift($this->ports) ?? throw new \LogicException('No more ports.');
+            }
+        };
+    }
+
+    public function test_open_retries_with_a_new_port_when_the_first_is_taken(): void
+    {
+        $manager = $this->managerWithPorts($this->fakeSshWithTakenPorts([41001]), [41001, 41002]);
+
+        $tunnel = $manager->open($this->keyConfig(), 'db', 5432, timeout: 3);
+
+        $this->assertSame(41002, $tunnel->localPort);
+        $this->assertSame([41001, 41002], $manager->handedOut);
+
+        $tunnel->close();
+
+        $this->assertSame(['known_hosts'], $this->remainingFiles());
+    }
+
+    public function test_open_gives_up_after_the_second_taken_port(): void
+    {
+        $manager = $this->managerWithPorts($this->fakeSshWithTakenPorts([41001, 41002]), [41001, 41002, 41003]);
+
+        try {
+            $manager->open($this->keyConfig(), 'db', 5432, timeout: 3);
+            $this->fail('Expected the tunnel to fail.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('local port picked for the SSH tunnel was taken', $e->getMessage());
+        }
+
+        $this->assertSame([41001, 41002], $manager->handedOut);
+        $this->assertSame(['known_hosts'], $this->remainingFiles());
+    }
+
+    public function test_other_failures_are_not_retried(): void
+    {
+        $manager = $this->managerWithPorts($this->fakeSsh(self::LOG_WRONG_KEY, staysUp: false), [41001, 41002]);
+
+        try {
+            $manager->open($this->keyConfig(), 'db', 5432, timeout: 3);
+            $this->fail('Expected the tunnel to fail.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('SSH authentication failed', $e->getMessage());
+        }
+
+        $this->assertSame([41001], $manager->handedOut);
+        $this->assertSame(['known_hosts'], $this->remainingFiles());
+    }
+
     public function test_explain_reports_the_last_line_that_is_not_debug_output(): void
     {
         $manager = new SshTunnelManager('ssh', $this->directory);
