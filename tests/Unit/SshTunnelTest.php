@@ -140,6 +140,34 @@ class SshTunnelTest extends TestCase
         (new SshTunnelManager('ssh', $this->directory.'/blocker/ssh'))->knownHostsFile();
     }
 
+    public function test_binary_and_state_directory_come_from_config(): void
+    {
+        config([
+            'services.ssh.binary' => '/opt/openssh/bin/ssh',
+            'services.ssh.state_dir' => $this->directory.'/from-config',
+        ]);
+
+        $manager = new SshTunnelManager;
+        $command = $manager->command(new SshTunnelConfig('bastion', 22, 'tunnel', 'password', password: 'pw'), 15432, 'db', 5432, null, true);
+
+        $this->assertSame('/opt/openssh/bin/ssh', $command[0]);
+        $this->assertSame($this->directory.'/from-config/known_hosts', $manager->knownHostsFile());
+    }
+
+    public function test_constructor_arguments_override_config(): void
+    {
+        config([
+            'services.ssh.binary' => '/opt/openssh/bin/ssh',
+            'services.ssh.state_dir' => $this->directory.'/from-config',
+        ]);
+
+        $manager = new SshTunnelManager('/usr/local/bin/ssh', $this->directory.'/explicit');
+        $command = $manager->command(new SshTunnelConfig('bastion', 22, 'tunnel', 'password', password: 'pw'), 15432, 'db', 5432, null, true);
+
+        $this->assertSame('/usr/local/bin/ssh', $command[0]);
+        $this->assertSame($this->directory.'/explicit/known_hosts', $manager->knownHostsFile());
+    }
+
     public function test_open_rejects_incomplete_settings_before_starting_ssh(): void
     {
         $manager = new SshTunnelManager('ssh', $this->directory);

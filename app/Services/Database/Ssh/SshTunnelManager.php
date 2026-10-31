@@ -103,7 +103,7 @@ class SshTunnelManager
         int $timeout = 10,
     ): array {
         $command = [
-            $this->binary ?? (string) env('ADBM_SSH_BINARY', 'ssh'),
+            $this->binary ?? (string) config('services.ssh.binary', 'ssh'),
             '-N', '-T',
             '-L', "127.0.0.1:{$localPort}:{$remoteHost}:{$remotePort}",
             '-p', (string) $config->port,
@@ -225,7 +225,7 @@ class SshTunnelManager
 
     protected function stateDirectory(): string
     {
-        $directory = $this->stateDirectory ?? (string) env('ADBM_SSH_STATE_DIR', storage_path('app/private/ssh'));
+        $directory = $this->stateDirectory ?? (string) config('services.ssh.state_dir', storage_path('app/private/ssh'));
 
         // Two processes (the collector and a "Test connection" click) can both
         // see the directory missing on a fresh volume. The loser's mkdir() then
