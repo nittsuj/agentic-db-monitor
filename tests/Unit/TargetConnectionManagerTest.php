@@ -130,6 +130,91 @@ class TargetConnectionManagerTest extends TestCase
         $this->manager->purge($name);
     }
 
+    /**
+     * A tunnel manager whose tunnels own a marker temp file. SshTunnel::close()
+     * deletes its temp files, so the marker disappearing proves the tunnel was
+     * closed. The fake keeps no reference to the tunnel, so only the manager's
+     * own bookkeeping can keep it (and the marker) alive.
+     */
+    protected function markerTunnels(string $marker): SshTunnelManager
+    {
+        return new class($marker) extends SshTunnelManager
+        {
+            public function __construct(private string $marker)
+            {
+                parent::__construct();
+            }
+
+            public function open(SshTunnelConfig $config, string $remoteHost, int $remotePort, int $timeout = 10): SshTunnel
+            {
+                touch($this->marker);
+
+                return new SshTunnel(45678, null, [$this->marker]);
+            }
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function sshOptionsWithUnsatisfiableCa(): array
+    {
+        return [
+            'ssl' => ['mode' => 'verify-ca'],
+            'ssh' => [
+                'enabled' => true,
+                'host' => 'bastion.example.com',
+                'port' => 22,
+                'username' => 'tunnel',
+                'auth' => 'key',
+                'private_key' => SshTunnelConfig::encrypt('KEY'),
+            ],
+        ];
+    }
+
+    public function test_temporary_connection_closes_the_tunnel_when_building_the_config_fails(): void
+    {
+        $marker = sys_get_temp_dir().DIRECTORY_SEPARATOR.'adbm-tunnel-'.uniqid();
+        $this->manager = new TargetConnectionManager($this->store(null), $this->markerTunnels($marker));
+
+        try {
+            $this->manager->connectTemporary(
+                driver: DbDriver::PgSql,
+                host: 'db.internal',
+                port: 5432,
+                database: 'app',
+                username: 'app',
+                password: 'secret',
+                options: $this->sshOptionsWithUnsatisfiableCa(),
+            );
+            $this->fail('Expected the missing CA to abort the connection.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('No CA certificate available', $e->getMessage());
+        }
+
+        $this->assertFileDoesNotExist($marker);
+    }
+
+    public function test_connect_closes_the_tunnel_when_building_the_config_fails(): void
+    {
+        $marker = sys_get_temp_dir().DIRECTORY_SEPARATOR.'adbm-tunnel-'.uniqid();
+        $this->manager = new TargetConnectionManager($this->store(null), $this->markerTunnels($marker));
+
+        $project = Project::factory()->create([
+            'driver' => DbDriver::PgSql,
+            'options' => $this->sshOptionsWithUnsatisfiableCa(),
+        ]);
+
+        try {
+            $this->manager->connect($project);
+            $this->fail('Expected the missing CA to abort the connection.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('No CA certificate available', $e->getMessage());
+        }
+
+        $this->assertFileDoesNotExist($marker);
+    }
+
     public function test_pgsql_defaults_to_prefer_without_ssl_options(): void
     {
         $config = $this->configFor(DbDriver::PgSql, []);

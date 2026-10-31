@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use PDO;
 use RuntimeException;
+use Throwable;
 
 class TargetConnectionManager
 {
@@ -54,7 +55,7 @@ class TargetConnectionManager
         $name = $this->connectionName($project);
         [$host, $port] = $this->endpoint($name, $project->host, $project->port, $project->options ?? []);
 
-        $config = $this->buildConfig(
+        $config = $this->closingTunnelOnFailure($name, fn (): array => $this->buildConfig(
             driver: $project->driver,
             host: $host,
             port: $port,
@@ -65,7 +66,7 @@ class TargetConnectionManager
             // Chat and the collector run inside a web/scheduler request, so an
             // unreachable target must fail fast rather than hold the worker.
             timeout: 5,
-        );
+        ));
 
         Config::set("database.connections.{$name}", $config);
 
@@ -89,7 +90,7 @@ class TargetConnectionManager
         $tempName = 'target_temp_verify_'.uniqid();
         [$host, $port] = $this->endpoint($tempName, $host, $port, $options);
 
-        $config = $this->buildConfig(
+        $config = $this->closingTunnelOnFailure($tempName, fn (): array => $this->buildConfig(
             driver: $driver,
             host: $host,
             port: $port,
@@ -98,7 +99,7 @@ class TargetConnectionManager
             password: $password,
             options: $options,
             timeout: 5,
-        );
+        ));
 
         Config::set("database.connections.{$tempName}", $config);
 
@@ -113,9 +114,35 @@ class TargetConnectionManager
         DB::purge($connectionName);
         Config::set("database.connections.{$connectionName}", null);
 
+        $this->closeTunnel($connectionName);
+    }
+
+    protected function closeTunnel(string $connectionName): void
+    {
         if (isset(static::$openTunnels[$connectionName])) {
             static::$openTunnels[$connectionName]->close();
             unset(static::$openTunnels[$connectionName]);
+        }
+    }
+
+    /**
+     * The tunnel is opened before the config is built, because the config
+     * needs its local port. If building fails (e.g. no CA bundle), the caller
+     * never gets a connection name to purge, so close the tunnel here.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $build
+     * @return T
+     */
+    protected function closingTunnelOnFailure(string $connectionName, callable $build): mixed
+    {
+        try {
+            return $build();
+        } catch (Throwable $e) {
+            $this->closeTunnel($connectionName);
+
+            throw $e;
         }
     }
 
