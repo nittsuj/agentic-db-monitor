@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Enums\ToolSupport;
 use App\Livewire\Chat\ChatWindow;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\Ai\AiProviderConfig;
 use App\Services\Ai\ToolSupportVerifier;
 use Generator;
@@ -26,6 +27,14 @@ use Tests\TestCase;
 class ChatWindowToolFallbackTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Chat sessions belong to the signed-in user.
+        $this->actingAs(User::factory()->create());
+    }
 
     public function test_chat_omits_tools_when_the_provider_is_known_to_reject_function_calling(): void
     {

@@ -17,15 +17,15 @@ class DemoSeeder extends Seeder
     {
         $now = now();
 
-        $this->seedUser($now);
+        $userId = $this->seedUser($now);
 
         $mysqlId = $this->seedProject('Local MySQL Playground', 'mysql', '127.0.0.1', 3306, 'playground', 'root', $now);
         $pgsqlId = $this->seedProject('Local Postgres Playground', 'pgsql', '127.0.0.1', 5432, 'playground_pg', 'postgres', $now);
 
         $this->seedAiSetting($now);
 
-        $mysqlSessionId = $this->seedChatSession($mysqlId, $now);
-        $pgsqlSessionId = $this->seedChatSession($pgsqlId, $now);
+        $mysqlSessionId = $this->seedChatSession($mysqlId, $userId, $now);
+        $pgsqlSessionId = $this->seedChatSession($pgsqlId, $userId, $now);
 
         $this->seedChatMessages($mysqlSessionId, $now);
         $this->seedChatMessages($pgsqlSessionId, $now);
@@ -42,12 +42,12 @@ class DemoSeeder extends Seeder
         $this->command->info('Demo data seeded.');
     }
 
-    private function seedUser($now): void
+    private function seedUser($now): int
     {
-        User::firstOrCreate(
+        return User::firstOrCreate(
             ['email' => 'admin@example.com'],
             ['name' => 'Demo Admin', 'password' => Hash::make('password'), 'email_verified_at' => $now]
-        );
+        )->id;
     }
 
     private function seedProject(string $name, string $driver, string $host, int $port, string $database, string $username, $now): string
@@ -87,15 +87,21 @@ class DemoSeeder extends Seeder
         ]);
     }
 
-    private function seedChatSession(string $projectId, $now): string
+    private function seedChatSession(string $projectId, int $userId, $now): string
     {
-        return $this->ensureRow('chat_sessions', [
+        $id = $this->ensureRow('chat_sessions', [
             'project_id' => $projectId,
             'title' => 'Playground chat',
         ], [
+            'user_id' => $userId,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+
+        // A demo session seeded before sessions had users has none yet.
+        DB::table('chat_sessions')->where('id', $id)->whereNull('user_id')->update(['user_id' => $userId]);
+
+        return $id;
     }
 
     private function seedChatMessages(string $sessionId, $now): void

@@ -8,7 +8,10 @@ use App\Livewire\Chat\ChatWindow;
 use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Models\MetricAnalyzer;
 use App\Models\Project;
+use App\Models\QueryDiagnostician;
+use App\Models\ToolExecutionLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -21,6 +24,17 @@ use Tests\TestCase;
 class ChatWindowTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Chat sessions belong to the signed-in user.
+        $this->user = User::factory()->create();
+        $this->actingAs($this->user);
+    }
 
     public function test_send_persists_user_and_assistant_messages(): void
     {
@@ -73,7 +87,7 @@ class ChatWindowTest extends TestCase
     {
         $project = Project::factory()->create();
         session(['active_project_id' => $project->id]);
-        $session = ChatSession::factory()->for($project)->create();
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
 
         ChatMessage::factory()->for($session)->create([
             'role' => 'assistant',
@@ -85,6 +99,32 @@ class ChatWindowTest extends TestCase
             ->assertSeeHtml('<strong>CPU</strong>')
             ->assertSeeHtml('<td>Load</td>')
             ->assertDontSeeHtml('<script>alert(1)</script>');
+    }
+
+    public function test_assistant_replies_show_the_tools_they_used_once_each(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+        ChatMessage::factory()->for($session)->create(['role' => 'user', 'content' => 'Why is it slow?']);
+        $reply = ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'Two queries dominate.']);
+        $quiet = ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'No tools needed.']);
+
+        $diagnostician = QueryDiagnostician::where('slug', QueryDiagnostician::SLUG)->sole();
+        $analyzer = MetricAnalyzer::where('slug', MetricAnalyzer::SLUG)->sole();
+        ToolExecutionLog::factory()->for($reply)->forAgent($diagnostician)->create(['tool_name' => 'list_tables', 'created_at' => now()->subSeconds(3)]);
+        ToolExecutionLog::factory()->for($reply)->forAgent($diagnostician)->create(['tool_name' => 'get_slow_queries', 'created_at' => now()->subSeconds(2)]);
+        ToolExecutionLog::factory()->for($reply)->forAgent($diagnostician)->create(['tool_name' => 'list_tables', 'created_at' => now()->subSecond()]);
+        ToolExecutionLog::factory()->for($reply)->forAgent($analyzer)->create(['tool_name' => 'get_metric_summary', 'created_at' => now()]);
+
+        $component = Livewire::test(ChatWindow::class)
+            ->assertSee('Alat: list_tables, get_slow_queries, get_metric_summary');
+
+        $messages = collect($component->get('messages'))->keyBy('content');
+        $this->assertSame(['list_tables', 'get_slow_queries', 'get_metric_summary'], $messages['Two queries dominate.']['tools']);
+        $this->assertSame([], $messages['No tools needed.']['tools']);
+        $this->assertSame([], $messages['Why is it slow?']['tools']);
+        $this->assertSame(1, substr_count($component->html(), 'Alat:'));
     }
 
     public function test_switches_the_ai_provider_from_the_chat(): void
@@ -166,7 +206,6 @@ class ChatWindowTest extends TestCase
     public function test_switching_project_can_return_to_the_chat(): void
     {
         $project = Project::factory()->create();
-        $this->actingAs(User::factory()->create());
 
         $this->get(route('switch-project', ['project' => $project->id, 'to' => 'chat']))
             ->assertRedirect(route('chat'));
@@ -180,7 +219,7 @@ class ChatWindowTest extends TestCase
     {
         $project = Project::factory()->create();
         session(['active_project_id' => $project->id]);
-        $session = ChatSession::factory()->for($project)->create();
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
         ChatMessage::factory()->for($session)->create(['role' => 'user', 'content' => 'How many connections are active?']);
         ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'There are 12 active connections.']);
 

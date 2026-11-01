@@ -10,10 +10,12 @@ use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\Project;
+use App\Services\Ai\AgentRegistry;
 use App\Services\Ai\AiErrorTranslator;
 use App\Services\Ai\AiProviderConfig;
 use App\Services\Ai\HiddenTagStreamFilter;
 use App\Services\Ai\ProposeMutationTool;
+use App\Services\Ai\ToolExecutionRecorder;
 use App\Services\Ai\ToolSupportVerifier;
 use App\Services\Database\DiagnosticTools;
 use App\Services\Database\TargetConnectionManager;
@@ -132,14 +134,23 @@ class ChatWindow extends Component
 
     private function loadOrCreateSession(): void
     {
-        if ($this->activeProjectId === null) {
+        $userId = auth()->id();
+
+        // Every chat route requires login. Without a user there is no session
+        // to show; querying user_id = null would pick up unassigned old ones.
+        if ($this->activeProjectId === null || $userId === null) {
             return;
         }
 
-        $session = ChatSession::where('project_id', $this->activeProjectId)->latest()->first();
+        // Each user has their own conversation per project.
+        $session = ChatSession::where('user_id', $userId)
+            ->where('project_id', $this->activeProjectId)
+            ->latest()
+            ->first();
 
         if ($session === null) {
             $session = ChatSession::create([
+                'user_id' => $userId,
                 'project_id' => $this->activeProjectId,
                 'title' => 'Chat',
             ]);
@@ -154,10 +165,16 @@ class ChatWindow extends Component
             return;
         }
 
-        $this->messages = ChatMessage::where('chat_session_id', $this->chatSessionId)
-            ->orderBy('created_at')
-            ->get()
-            ->map(fn ($m) => ['role' => $m->role->value, 'content' => $m->content])
+        $session = ChatSession::withFullHistory()->find($this->chatSessionId);
+
+        $this->messages = ($session?->messages ?? collect())
+            ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
+            ->map(fn (ChatMessage $m) => [
+                'role' => $m->role->value,
+                'content' => $m->content,
+                // Already eager-loaded by withFullHistory(), so no query per message.
+                'tools' => self::distinctToolNames($m->toolExecutionLogs->pluck('tool_name')->all()),
+            ])
             ->toArray();
     }
 
@@ -212,12 +229,17 @@ class ChatWindow extends Component
                 $this->errorMessage = self::TOOLS_UNSUPPORTED_WARNING;
             }
 
+            // Every tool call of this reply is recorded and saved on the reply.
+            $recorder = new ToolExecutionRecorder;
+            $tools = $recorder->wrap($tools);
+
             $history = ChatMessage::where('chat_session_id', $this->chatSessionId)
                 ->whereIn('role', [ChatRole::User, ChatRole::Assistant, ChatRole::Tool])
                 ->latest('created_at')
                 ->limit(20)
                 ->get()
                 ->reverse()
+                ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
                 ->map(fn (ChatMessage $message) => match ($message->role) {
                     ChatRole::User => new UserMessage($message->content),
                     ChatRole::Tool => new UserMessage("[tool result] {$message->content}"),
@@ -241,13 +263,22 @@ class ChatWindow extends Component
                 $finalContent = $this->streamReply($aiConfig, [], $history);
             }
 
-            if ($finalContent !== '') {
-                ChatMessage::create([
+            // A reply that only called tools still gets a message, so its tool
+            // logs have one to belong to; it is not shown as an empty bubble.
+            $toolNames = self::distinctToolNames(array_column($recorder->executions(), 'tool_name'));
+
+            if ($finalContent !== '' || $recorder->hasExecutions()) {
+                $reply = ChatMessage::create([
                     'chat_session_id' => $this->chatSessionId,
                     'role' => ChatRole::Assistant,
                     'content' => $finalContent,
                 ]);
-                $this->messages[] = ['role' => 'assistant', 'content' => $finalContent];
+
+                $recorder->saveFor($reply, app(AgentRegistry::class));
+            }
+
+            if ($finalContent !== '') {
+                $this->messages[] = ['role' => 'assistant', 'content' => $finalContent, 'tools' => $toolNames];
             }
 
             // The agent may have queued a proposal; let the sidebar badge catch up.
@@ -268,6 +299,25 @@ class ChatWindow extends Component
             $this->assistantContent = '';
             $this->isSending = false;
         }
+    }
+
+    /**
+     * Each tool once, in the order it was first used.
+     *
+     * @param  array<int, string>  $names
+     * @return list<string>
+     */
+    private static function distinctToolNames(array $names): array
+    {
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * An assistant message saved only to hold tool logs, with no text to show.
+     */
+    private static function isEmptyReply(ChatMessage $message): bool
+    {
+        return $message->role === ChatRole::Assistant && trim((string) $message->content) === '';
     }
 
     /**
