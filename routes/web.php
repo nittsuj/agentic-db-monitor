@@ -29,3 +29,5 @@ Route::get('/switch-project/{project}', function (Request $request, Project $pro
 
     return redirect()->route(in_array($target, $allowed, true) ? $target : 'dashboard');
 })->name('switch-project');
+
+require __DIR__.'/auth.php';
