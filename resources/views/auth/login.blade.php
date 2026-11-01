@@ -28,5 +28,7 @@
         <button type="submit" class="btn primary">Masuk</button>
     </form>
 
+    <p class="muted small"><a href="{{ route('password.request') }}">Lupa password?</a></p>
+
     <p class="muted small">Belum punya akun? <a href="{{ route('register') }}">Daftar</a></p>
 </x-layouts.guest>
