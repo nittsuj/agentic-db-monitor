@@ -14,6 +14,7 @@
         "prism-php/prism": "^0.102.0"
     },
     "require-dev": {
+        "barryvdh/laravel-debugbar": "^4.4",
         "fakerphp/faker": "^1.23",
         "laravel/boost": "^2.10",
         "laravel/pail": "^1.2.5",
