@@ -165,9 +165,9 @@ class ChatWindow extends Component
             return;
         }
 
-        $this->messages = ChatMessage::where('chat_session_id', $this->chatSessionId)
-            ->orderBy('created_at')
-            ->get()
+        $session = ChatSession::withFullHistory()->find($this->chatSessionId);
+
+        $this->messages = ($session?->messages ?? collect())
             ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
             ->map(fn ($m) => ['role' => $m->role->value, 'content' => $m->content])
             ->toArray();
