@@ -120,7 +120,7 @@ class ChatToolLoggingTest extends TestCase
         $this->send('Clean up session 1');
 
         $reply = $this->assistantReply();
-        $logs = $reply->toolExecutionLogs()->orderBy('created_at')->get();
+        $logs = $reply->toolExecutionLogs()->with('loggable')->orderBy('created_at')->get();
 
         $this->assertSame('I queued the delete for your approval.', $reply->content);
         $this->assertSame(['get_metric_summary', 'propose_mutation'], $logs->pluck('tool_name')->all());
