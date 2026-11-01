@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChatMessage extends Model
 {
@@ -36,5 +37,15 @@ class ChatMessage extends Model
     public function chatSession(): BelongsTo
     {
         return $this->belongsTo(ChatSession::class);
+    }
+
+    /**
+     * Tool calls the assistant made while writing this reply.
+     *
+     * @return HasMany<ToolExecutionLog, $this>
+     */
+    public function toolExecutionLogs(): HasMany
+    {
+        return $this->hasMany(ToolExecutionLog::class);
     }
 }

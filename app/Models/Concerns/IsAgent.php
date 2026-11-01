@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models\Concerns;
 
+use App\Models\ToolExecutionLog;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Shared by the agent models a tool execution log can point to. Each agent
@@ -32,5 +34,15 @@ trait IsAgent
     public function handlesTool(string $tool): bool
     {
         return in_array($tool, $this->handles ?? [], true);
+    }
+
+    /**
+     * Tool calls this agent ran.
+     *
+     * @return MorphMany<ToolExecutionLog, $this>
+     */
+    public function toolExecutionLogs(): MorphMany
+    {
+        return $this->morphMany(ToolExecutionLog::class, 'loggable');
     }
 }
