@@ -22,6 +22,17 @@ class ChatWindowTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Chat sessions belong to the signed-in user.
+        $this->user = User::factory()->create();
+        $this->actingAs($this->user);
+    }
+
     public function test_send_persists_user_and_assistant_messages(): void
     {
         $project = Project::factory()->create();
@@ -73,7 +84,7 @@ class ChatWindowTest extends TestCase
     {
         $project = Project::factory()->create();
         session(['active_project_id' => $project->id]);
-        $session = ChatSession::factory()->for($project)->create();
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
 
         ChatMessage::factory()->for($session)->create([
             'role' => 'assistant',
@@ -166,7 +177,6 @@ class ChatWindowTest extends TestCase
     public function test_switching_project_can_return_to_the_chat(): void
     {
         $project = Project::factory()->create();
-        $this->actingAs(User::factory()->create());
 
         $this->get(route('switch-project', ['project' => $project->id, 'to' => 'chat']))
             ->assertRedirect(route('chat'));
@@ -180,7 +190,7 @@ class ChatWindowTest extends TestCase
     {
         $project = Project::factory()->create();
         session(['active_project_id' => $project->id]);
-        $session = ChatSession::factory()->for($project)->create();
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
         ChatMessage::factory()->for($session)->create(['role' => 'user', 'content' => 'How many connections are active?']);
         ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'There are 12 active connections.']);
 

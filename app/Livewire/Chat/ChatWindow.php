@@ -132,14 +132,23 @@ class ChatWindow extends Component
 
     private function loadOrCreateSession(): void
     {
-        if ($this->activeProjectId === null) {
+        $userId = auth()->id();
+
+        // Every chat route requires login. Without a user there is no session
+        // to show; querying user_id = null would pick up unassigned old ones.
+        if ($this->activeProjectId === null || $userId === null) {
             return;
         }
 
-        $session = ChatSession::where('project_id', $this->activeProjectId)->latest()->first();
+        // Each user has their own conversation per project.
+        $session = ChatSession::where('user_id', $userId)
+            ->where('project_id', $this->activeProjectId)
+            ->latest()
+            ->first();
 
         if ($session === null) {
             $session = ChatSession::create([
+                'user_id' => $userId,
                 'project_id' => $this->activeProjectId,
                 'title' => 'Chat',
             ]);
