@@ -9,6 +9,7 @@ use App\Livewire\Shell\Sidebar;
 use App\Models\MetricSample;
 use App\Models\PendingAction;
 use App\Models\Project;
+use App\Models\User;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -86,5 +87,28 @@ class SidebarTest extends TestCase
             ->assertSet('notice', 'Data demo dipulihkan.');
 
         $this->assertSame($before, MetricSample::where('project_id', $project->id)->count());
+    }
+
+    public function test_shows_the_signed_in_user_and_a_logout_button(): void
+    {
+        $user = User::factory()->create(['name' => 'Sari Wulandari', 'email' => 'sari@example.com']);
+
+        Livewire::actingAs($user)
+            ->test(Sidebar::class)
+            ->assertSee('Masuk sebagai')
+            ->assertSee('Sari Wulandari')
+            ->assertSee('sari@example.com')
+            ->assertSeeHtml('action="'.route('logout').'"')
+            ->assertSee('Keluar');
+    }
+
+    public function test_the_logout_button_signs_the_user_out(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
+
+        $this->assertGuest();
+        $this->get(route('dashboard'))->assertRedirect(route('login'));
     }
 }

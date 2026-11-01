@@ -9,6 +9,7 @@ use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Prism\Prism\Facades\Prism;
@@ -165,6 +166,7 @@ class ChatWindowTest extends TestCase
     public function test_switching_project_can_return_to_the_chat(): void
     {
         $project = Project::factory()->create();
+        $this->actingAs(User::factory()->create());
 
         $this->get(route('switch-project', ['project' => $project->id, 'to' => 'chat']))
             ->assertRedirect(route('chat'));
