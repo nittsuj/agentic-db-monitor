@@ -169,7 +169,12 @@ class ChatWindow extends Component
 
         $this->messages = ($session?->messages ?? collect())
             ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
-            ->map(fn ($m) => ['role' => $m->role->value, 'content' => $m->content])
+            ->map(fn (ChatMessage $m) => [
+                'role' => $m->role->value,
+                'content' => $m->content,
+                // Already eager-loaded by withFullHistory(), so no query per message.
+                'tools' => self::distinctToolNames($m->toolExecutionLogs->pluck('tool_name')->all()),
+            ])
             ->toArray();
     }
 
@@ -260,6 +265,8 @@ class ChatWindow extends Component
 
             // A reply that only called tools still gets a message, so its tool
             // logs have one to belong to; it is not shown as an empty bubble.
+            $toolNames = self::distinctToolNames(array_column($recorder->executions(), 'tool_name'));
+
             if ($finalContent !== '' || $recorder->hasExecutions()) {
                 $reply = ChatMessage::create([
                     'chat_session_id' => $this->chatSessionId,
@@ -271,7 +278,7 @@ class ChatWindow extends Component
             }
 
             if ($finalContent !== '') {
-                $this->messages[] = ['role' => 'assistant', 'content' => $finalContent];
+                $this->messages[] = ['role' => 'assistant', 'content' => $finalContent, 'tools' => $toolNames];
             }
 
             // The agent may have queued a proposal; let the sidebar badge catch up.
@@ -292,6 +299,17 @@ class ChatWindow extends Component
             $this->assistantContent = '';
             $this->isSending = false;
         }
+    }
+
+    /**
+     * Each tool once, in the order it was first used.
+     *
+     * @param  array<int, string>  $names
+     * @return list<string>
+     */
+    private static function distinctToolNames(array $names): array
+    {
+        return array_values(array_unique($names));
     }
 
     /**

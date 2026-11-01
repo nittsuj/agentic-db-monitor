@@ -62,6 +62,12 @@
                         {{-- Model output is Markdown. Raw HTML in it is escaped and unsafe
                              links are dropped, so a reply cannot inject markup or scripts. --}}
                         <div class="md">{!! \App\Livewire\Chat\ChatWindow::renderMarkdown($message['content']) !!}</div>
+                        @if (! empty($message['tools']))
+                            <span class="od-row mono muted small" style="gap:6px" title="Alat yang dipakai agen untuk jawaban ini">
+                                <svg class="od-icon" style="width:13px;height:13px"><use href="#i-tool" /></svg>
+                                Alat: {{ implode(', ', $message['tools']) }}
+                            </span>
+                        @endif
                     @else
                         <span style="font-size:14px;line-height:1.55;white-space:pre-wrap">{{ $message['content'] }}</span>
                     @endif

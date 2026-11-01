@@ -139,6 +139,23 @@ class ChatToolLoggingTest extends TestCase
         }
     }
 
+    public function test_a_new_reply_shows_its_tools_right_away(): void
+    {
+        $this->providerCalling([
+            ['get_metric_summary', ['window_minutes' => 30]],
+            ['get_metric_summary', ['window_minutes' => 60]],
+        ], 'CPU has been flat.');
+
+        $component = Livewire::test(ChatWindow::class)
+            ->set('input', 'How is the CPU?')
+            ->call('send')
+            ->assertHasNoErrors()
+            ->assertSee('Alat: get_metric_summary');
+
+        $reply = collect($component->get('messages'))->firstWhere('role', 'assistant');
+        $this->assertSame(['get_metric_summary'], $reply['tools']);
+    }
+
     public function test_a_failing_tool_is_logged_as_an_error(): void
     {
         $this->providerCalling([['list_tables', []]], 'I could not reach the database.');
