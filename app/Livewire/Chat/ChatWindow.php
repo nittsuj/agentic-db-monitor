@@ -10,10 +10,12 @@ use App\Models\AiSetting;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\Project;
+use App\Services\Ai\AgentRegistry;
 use App\Services\Ai\AiErrorTranslator;
 use App\Services\Ai\AiProviderConfig;
 use App\Services\Ai\HiddenTagStreamFilter;
 use App\Services\Ai\ProposeMutationTool;
+use App\Services\Ai\ToolExecutionRecorder;
 use App\Services\Ai\ToolSupportVerifier;
 use App\Services\Database\DiagnosticTools;
 use App\Services\Database\TargetConnectionManager;
@@ -166,6 +168,7 @@ class ChatWindow extends Component
         $this->messages = ChatMessage::where('chat_session_id', $this->chatSessionId)
             ->orderBy('created_at')
             ->get()
+            ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
             ->map(fn ($m) => ['role' => $m->role->value, 'content' => $m->content])
             ->toArray();
     }
@@ -221,12 +224,17 @@ class ChatWindow extends Component
                 $this->errorMessage = self::TOOLS_UNSUPPORTED_WARNING;
             }
 
+            // Every tool call of this reply is recorded and saved on the reply.
+            $recorder = new ToolExecutionRecorder;
+            $tools = $recorder->wrap($tools);
+
             $history = ChatMessage::where('chat_session_id', $this->chatSessionId)
                 ->whereIn('role', [ChatRole::User, ChatRole::Assistant, ChatRole::Tool])
                 ->latest('created_at')
                 ->limit(20)
                 ->get()
                 ->reverse()
+                ->reject(fn (ChatMessage $message): bool => self::isEmptyReply($message))
                 ->map(fn (ChatMessage $message) => match ($message->role) {
                     ChatRole::User => new UserMessage($message->content),
                     ChatRole::Tool => new UserMessage("[tool result] {$message->content}"),
@@ -250,12 +258,19 @@ class ChatWindow extends Component
                 $finalContent = $this->streamReply($aiConfig, [], $history);
             }
 
-            if ($finalContent !== '') {
-                ChatMessage::create([
+            // A reply that only called tools still gets a message, so its tool
+            // logs have one to belong to; it is not shown as an empty bubble.
+            if ($finalContent !== '' || $recorder->hasExecutions()) {
+                $reply = ChatMessage::create([
                     'chat_session_id' => $this->chatSessionId,
                     'role' => ChatRole::Assistant,
                     'content' => $finalContent,
                 ]);
+
+                $recorder->saveFor($reply, app(AgentRegistry::class));
+            }
+
+            if ($finalContent !== '') {
                 $this->messages[] = ['role' => 'assistant', 'content' => $finalContent];
             }
 
@@ -277,6 +292,14 @@ class ChatWindow extends Component
             $this->assistantContent = '';
             $this->isSending = false;
         }
+    }
+
+    /**
+     * An assistant message saved only to hold tool logs, with no text to show.
+     */
+    private static function isEmptyReply(ChatMessage $message): bool
+    {
+        return $message->role === ChatRole::Assistant && trim((string) $message->content) === '';
     }
 
     /**
