@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChatHistoryController;
 use App\Livewire\Approvals\ApprovalQueue;
 use App\Livewire\Chat\ChatWindow;
 use App\Livewire\Dashboard\HealthDashboard;
@@ -18,6 +19,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/dashboard', HealthDashboard::class)->name('dashboard');
     Route::get('/chat', ChatWindow::class)->name('chat');
+    Route::get('/chat/history', [ChatHistoryController::class, 'index'])->name('chat.history');
+    Route::get('/chat/history/{session}', [ChatHistoryController::class, 'show'])->name('chat.history.show');
     Route::get('/approvals', ApprovalQueue::class)->name('approvals');
 
     Route::get('/settings/ai', AiSettingsForm::class)->name('settings.ai');
