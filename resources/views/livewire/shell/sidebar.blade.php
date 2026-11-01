@@ -95,4 +95,19 @@
             <span class="badge ok">{{ $notice }}</span>
         @endif
     </div>
+
+    @auth
+        <div class="od-stack" style="gap:6px">
+            <span class="label">Masuk sebagai</span>
+            <span class="small od-truncate">{{ auth()->user()->name }}</span>
+            <span class="mono muted small od-truncate">{{ auth()->user()->email }}</span>
+
+            {{-- A plain form, not wire:click: logging out ends the session that
+                 Livewire's own requests depend on. --}}
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="btn ghost sm" style="width:100%">Keluar</button>
+            </form>
+        </div>
+    @endauth
 </aside>
