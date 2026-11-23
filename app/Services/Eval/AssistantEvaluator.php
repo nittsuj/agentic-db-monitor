@@ -33,7 +33,18 @@ final class AssistantEvaluator
         private readonly DiagnosticDriver $driver,
         private readonly array $aiConfig,
         private readonly int $timeoutSeconds = AiProviderConfig::TIMEOUT_SECONDS,
+        private readonly bool $thinking = true,
     ) {}
+
+    /**
+     * Only Ollama lets a request switch a reasoning model's thinking off.
+     *
+     * @param  array{prism: string}  $aiConfig
+     */
+    public static function canDisableThinking(array $aiConfig): bool
+    {
+        return $aiConfig['prism'] === 'ollama';
+    }
 
     /**
      * @return array{id: string, category: string, question: string, passed: bool, reason: string, answer: string, tools: list<string>, seconds: float, error: string|null}
@@ -47,7 +58,7 @@ final class AssistantEvaluator
         $error = null;
 
         try {
-            $response = Prism::text()
+            $request = Prism::text()
                 ->using($this->aiConfig['prism'], $this->aiConfig['model'], [
                     'api_key' => $this->aiConfig['api_key'],
                     'url' => $this->aiConfig['base_url'],
@@ -56,8 +67,13 @@ final class AssistantEvaluator
                 ->withSystemPrompt(ChatWindow::systemPrompt(false))
                 ->withMessages([new UserMessage($case->question)])
                 ->withMaxSteps(6)
-                ->withTools($tools)
-                ->asText();
+                ->withTools($tools);
+
+            if (! $this->thinking && self::canDisableThinking($this->aiConfig)) {
+                $request = $request->withProviderOptions(['thinking' => false]);
+            }
+
+            $response = $request->asText();
 
             $filter = new HiddenTagStreamFilter;
             $answer = trim($filter->push($response->text).$filter->flush());

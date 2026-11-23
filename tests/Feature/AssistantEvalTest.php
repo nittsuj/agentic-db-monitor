@@ -65,6 +65,27 @@ class AssistantEvalTest extends TestCase
         $this->assertSame('missing: orders', $wrong['reason']);
     }
 
+    public function test_thinking_can_be_switched_off_for_ollama_only(): void
+    {
+        $fake = Prism::fake([
+            TextResponseFake::make()->withText('orders'),
+            TextResponseFake::make()->withText('orders'),
+        ]);
+        $case = new EvalCase('x', 'size', 'q', mustMention: ['orders']);
+        $connection = $this->createMock(ConnectionInterface::class);
+
+        (new AssistantEvaluator($connection, $this->fakeDriver(), self::AI, thinking: false))->run($case);
+        (new AssistantEvaluator($connection, $this->fakeDriver(), ['prism' => 'deepseek'] + self::AI, thinking: false))->run($case);
+
+        $options = [];
+        $fake->assertRequest(function (array $requests) use (&$options): void {
+            $options = array_map(fn ($request): mixed => $request->providerOptions('thinking'), $requests);
+        });
+
+        $this->assertSame([false, null], $options);
+        $this->assertFalse(AssistantEvaluator::canDisableThinking(['prism' => 'openai']));
+    }
+
     public function test_a_provider_error_counts_as_a_wrong_answer(): void
     {
         Prism::shouldReceive('text')->andThrow(new ConnectionException('cURL error 28: Operation timed out'));

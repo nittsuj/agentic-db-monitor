@@ -22,6 +22,7 @@ class AssistantEval extends Command
                             {--provider= : AI setting id or provider name (defaults to the active one)}
                             {--timeout= : Seconds per answer (defaults to the app\'s own limit)}
                             {--category= : Only run questions of this category}
+                            {--no-think : Switch off the reasoning step of the model (Ollama only); faster, maybe less accurate}
                             {--list : Show the questions and expected answers without asking the assistant}
                             {--json= : Also write the full results to this file}';
 
@@ -74,9 +75,15 @@ class AssistantEval extends Command
 
             $aiConfig = AiProviderConfig::resolve($setting);
             $timeout = (int) ($this->option('timeout') ?: AiProviderConfig::TIMEOUT_SECONDS);
-            $evaluator = new AssistantEvaluator($connection, $driver, $aiConfig, $timeout);
+            $thinking = ! $this->option('no-think');
 
-            $this->info("Asking {$aiConfig['provider']} / {$aiConfig['model']} ".count($cases)." questions about {$project->name} ({$timeout}s per answer)…");
+            if (! $thinking && ! AssistantEvaluator::canDisableThinking($aiConfig)) {
+                $this->warn('--no-think only works with Ollama; this provider keeps its default.');
+            }
+
+            $evaluator = new AssistantEvaluator($connection, $driver, $aiConfig, $timeout, $thinking);
+
+            $this->info("Asking {$aiConfig['provider']} / {$aiConfig['model']} ".count($cases)." questions about {$project->name} ({$timeout}s per answer".($thinking ? '' : ', thinking off').')…');
 
             $results = [];
             foreach ($cases as $i => $case) {
@@ -107,6 +114,7 @@ class AssistantEval extends Command
                 'provider' => $aiConfig['provider'],
                 'model' => $aiConfig['model'],
                 'timeout_seconds' => $timeout,
+                'thinking' => $thinking,
                 'ran_at' => now()->toIso8601String(),
                 'results' => $results,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
