@@ -20,13 +20,45 @@ class PostgresDiagnosticDriver implements DiagnosticDriver
 
     public function getTableSchema(ConnectionInterface $connection, string $table): array
     {
-        return $connection->select(
+        $columns = $connection->select(
             "SELECT column_name AS name, data_type AS type, is_nullable AS nullable, column_default AS default_value
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = ?
              ORDER BY ordinal_position",
             [$table]
         );
+
+        // Expression columns of an index (attnum 0) have no name, so they are skipped.
+        $indexes = $connection->select(
+            "SELECT i.relname AS index_name, a.attname AS column_name, k.seq,
+                    ix.indisunique AS is_unique, ix.indisprimary AS is_primary
+             FROM pg_index ix
+             JOIN pg_class t ON t.oid = ix.indrelid
+             JOIN pg_namespace n ON n.oid = t.relnamespace
+             JOIN pg_class i ON i.oid = ix.indexrelid
+             CROSS JOIN LATERAL unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, seq)
+             JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+             WHERE n.nspname = 'public' AND t.relname = ?
+             ORDER BY i.relname, k.seq",
+            [$table]
+        );
+
+        $foreignKeys = $connection->select(
+            "SELECT c.conname AS constraint_name, a.attname AS column_name, k.seq,
+                    rt.relname AS referenced_table, ra.attname AS referenced_column
+             FROM pg_constraint c
+             JOIN pg_class t ON t.oid = c.conrelid
+             JOIN pg_namespace n ON n.oid = t.relnamespace
+             JOIN pg_class rt ON rt.oid = c.confrelid
+             CROSS JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(attnum, ref_attnum, seq)
+             JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+             JOIN pg_attribute ra ON ra.attrelid = rt.oid AND ra.attnum = k.ref_attnum
+             WHERE c.contype = 'f' AND n.nspname = 'public' AND t.relname = ?
+             ORDER BY c.conname, k.seq",
+            [$table]
+        );
+
+        return TableSchema::build($columns, $indexes, $foreignKeys);
     }
 
     public function getSlowQueries(ConnectionInterface $connection, int $limit = 10): array

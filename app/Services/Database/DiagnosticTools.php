@@ -24,7 +24,7 @@ class DiagnosticTools
 
             (new Tool)
                 ->as('get_table_schema')
-                ->for('Get column definitions for a known table. Only call for tables returned by list_tables. Max 2-3 calls per request.')
+                ->for('Get the columns, indexes and foreign keys of a known table. Each foreign key says whether an index supports it, and unindexed_foreign_keys lists those that have none. Only call for tables returned by list_tables. Max 2-3 calls per request.')
                 ->withParameter(new StringSchema('table', 'Exact table name from list_tables'))
                 ->using(fn (string $table): string => self::encode($driver->getTableSchema($connection, $table))),
 
