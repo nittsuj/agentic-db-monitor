@@ -47,5 +47,9 @@ class AppServiceProvider extends ServiceProvider
         // Brute-force guard for token login: per email and client IP.
         RateLimiter::for('api-login', fn (Request $request) => Limit::perMinute(5)
             ->by(Str::lower((string) $request->input('email')).'|'.$request->ip()));
+
+        // Every chat call costs provider quota, so the limit is per token owner.
+        RateLimiter::for('chat-ai', fn (Request $request) => Limit::perMinute((int) config('llm-hub.rate_limit'))
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 }

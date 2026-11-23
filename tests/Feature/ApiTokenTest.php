@@ -76,4 +76,24 @@ class ApiTokenTest extends TestCase
         $this->assertNull(PersonalAccessToken::findToken($current));
         $this->assertSame(['other'], $user->tokens()->pluck('name')->all());
     }
+
+    public function test_logout_still_works_after_the_chat_limit_is_used_up(): void
+    {
+        config(['llm-hub.rate_limit' => 1]);
+        $user = User::factory()->create();
+        $token = $user->createToken('current', ['chat:ai'])->plainTextToken;
+
+        $this->withToken($token)->postJson('/api/chat-ai', []);
+        $this->withToken($token)->postJson('/api/chat-ai', [])->assertTooManyRequests();
+
+        $this->withToken($token)->postJson('/api/logout')->assertOk();
+    }
+
+    public function test_api_404_uses_the_error_format_but_web_pages_do_not(): void
+    {
+        $this->postJson('/api/nope')->assertNotFound()->assertJsonPath('status', 'error');
+        $this->getJson('/api/chat-ai')->assertStatus(405)->assertJsonPath('status', 'error');
+
+        $this->get('/nope')->assertNotFound()->assertDontSee('"status":"error"', false);
+    }
 }
