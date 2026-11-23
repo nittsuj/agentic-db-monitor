@@ -98,6 +98,31 @@ class AssistantEvalTest extends TestCase
         $this->assertSame('error: cURL error 28: Operation timed out', $result['reason']);
     }
 
+    public function test_unanswered_questions_are_left_out_of_the_score(): void
+    {
+        $results = [
+            ['passed' => true, 'error' => null, 'seconds' => 10.0],
+            ['passed' => false, 'error' => null, 'seconds' => 20.0],
+            ['passed' => true, 'error' => null, 'seconds' => 30.0],
+            ['passed' => false, 'error' => 'cURL error 28: timed out', 'seconds' => 45.0],
+        ];
+
+        $this->assertSame(
+            ['answered' => 3, 'passed' => 2, 'unanswered' => 1, 'percent' => 66.7, 'average_seconds' => 20.0],
+            AssistantEvaluator::score($results),
+        );
+    }
+
+    public function test_no_answers_means_no_score_rather_than_zero_percent(): void
+    {
+        $results = array_fill(0, 3, ['passed' => false, 'error' => 'Resolving timed out', 'seconds' => 5.0]);
+
+        $this->assertSame(
+            ['answered' => 0, 'passed' => 0, 'unanswered' => 3, 'percent' => null, 'average_seconds' => null],
+            AssistantEvaluator::score($results),
+        );
+    }
+
     public function test_the_stand_in_tool_does_not_queue_anything(): void
     {
         $reply = json_decode(AssistantEvaluator::proposeMutationStandIn()->handle(command: 'DELETE FROM orders'), true);

@@ -100,6 +100,28 @@ final class AssistantEvaluator
     }
 
     /**
+     * The score over the questions that got an answer. A question that timed out
+     * or hit a connection error says nothing about correctness, so it is counted
+     * apart; with no answers at all there is no score (percent is null).
+     *
+     * @param  list<array{passed: bool, error: string|null, seconds: float}>  $results
+     * @return array{answered: int, passed: int, unanswered: int, percent: float|null, average_seconds: float|null}
+     */
+    public static function score(array $results): array
+    {
+        $answered = array_values(array_filter($results, fn (array $r): bool => $r['error'] === null));
+        $passed = count(array_filter($answered, fn (array $r): bool => $r['passed']));
+
+        return [
+            'answered' => count($answered),
+            'passed' => $passed,
+            'unanswered' => count($results) - count($answered),
+            'percent' => $answered === [] ? null : round(100 * $passed / count($answered), 1),
+            'average_seconds' => $answered === [] ? null : round(array_sum(array_column($answered, 'seconds')) / count($answered), 1),
+        ];
+    }
+
+    /**
      * Same name, description and parameter as the real tool, so the model sees no
      * difference, but the proposal is neither stored nor executed.
      */

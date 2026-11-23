@@ -86,6 +86,7 @@ class AssistantEval extends Command
             $this->info("Asking {$aiConfig['provider']} / {$aiConfig['model']} ".count($cases)." questions about {$project->name} ({$timeout}s per answer".($thinking ? '' : ', thinking off').')…');
 
             $results = [];
+            $errorsInARow = 0;
             foreach ($cases as $i => $case) {
                 // Answers can take minutes on a local model; show what is being waited on.
                 $this->output->write(sprintf('%2d/%d  asking: %s … ', $i + 1, count($cases), Str::limit($case->question, 70)));
@@ -101,12 +102,18 @@ class AssistantEval extends Command
                     $result['seconds'],
                     Str::limit($result['reason'], 80),
                 ));
+
+                $errorsInARow = $result['error'] === null ? 0 : $errorsInARow + 1;
+                if ($errorsInARow === 3 && $i + 1 < count($cases)) {
+                    $this->error('Stopped: the last 3 questions got no answer, so the provider looks unreachable.');
+                    break;
+                }
             }
         } finally {
             $connections->purge($connectionName);
         }
 
-        $this->summary($results);
+        $scored = $this->summary($results);
 
         if ($path = $this->option('json')) {
             file_put_contents($path, json_encode([
@@ -121,33 +128,48 @@ class AssistantEval extends Command
             $this->line("Full results written to {$path}");
         }
 
-        return self::SUCCESS;
+        return $scored ? self::SUCCESS : self::FAILURE;
     }
 
     /**
+     * Questions that got no answer (timeouts, connection errors) say nothing about
+     * correctness, so they are reported apart and left out of the score.
+     *
      * @param  list<array{category: string, passed: bool, error: string|null, seconds: float}>  $results
+     * @return bool whether any question was answered, i.e. whether there is a score
      */
-    private function summary(array $results): void
+    private function summary(array $results): bool
     {
+        $score = AssistantEvaluator::score($results);
+
         $rows = [];
         foreach (collect($results)->groupBy('category') as $category => $group) {
-            $rows[] = [$category, $group->where('passed', true)->count().'/'.$group->count()];
+            $noAnswer = $group->whereNotNull('error')->count();
+            $rows[] = [
+                $category,
+                $group->where('passed', true)->count().'/'.($group->count() - $noAnswer),
+                $noAnswer ?: '',
+            ];
         }
 
         $this->newLine();
-        $this->table(['Category', 'Correct'], $rows);
+        $this->table(['Category', 'Correct', 'No answer'], $rows);
 
-        $passed = count(array_filter($results, fn (array $r): bool => $r['passed']));
-        $errors = count(array_filter($results, fn (array $r): bool => $r['error'] !== null));
-        $percent = round(100 * $passed / count($results), 1);
+        if ($score['percent'] === null) {
+            $this->error('No score: none of the '.count($results).' questions got an answer. Check the provider and the network, then run again.');
 
-        $this->info("Correctness: {$passed}/".count($results)." ({$percent}%)");
-
-        if ($errors > 0) {
-            $this->warn("{$errors} question(s) failed with an error (often a timeout); they count as wrong.");
+            return false;
         }
 
-        $this->line('Average time per answer: '.round(array_sum(array_column($results, 'seconds')) / count($results), 1).'s');
+        $this->info("Correctness: {$score['passed']}/{$score['answered']} answered questions ({$score['percent']}%)");
+
+        if ($score['unanswered'] > 0) {
+            $this->warn("{$score['unanswered']} question(s) got no answer (timeout or connection error) and are not in the score.");
+        }
+
+        $this->line("Average time per answer: {$score['average_seconds']}s");
+
+        return true;
     }
 
     private function aiSetting(): AiSetting|false|null
