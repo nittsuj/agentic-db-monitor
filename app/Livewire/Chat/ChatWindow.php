@@ -337,7 +337,7 @@ class ChatWindow extends Component
                 'url' => $aiConfig['base_url'],
             ])
             ->withClientOptions(AiProviderConfig::clientOptions())
-            ->withSystemPrompt($this->systemPrompt($tools === []))
+            ->withSystemPrompt(self::systemPrompt($tools === []))
             ->withMessages($history)
             ->withMaxSteps(6);
 
@@ -359,7 +359,10 @@ class ChatWindow extends Component
         return trim((string) preg_replace('/<think>.*?<\/think>/s', '', $this->assistantContent));
     }
 
-    private function systemPrompt(bool $withoutTools): string
+    /**
+     * Also used by the assistant:eval command, so it scores the prompt the chat really sends.
+     */
+    public static function systemPrompt(bool $withoutTools): string
     {
         $prompt = 'You are a database diagnostics assistant. Use read-only diagnostic tools when they can answer the user\'s question. Only inspect table schemas when relevant, and only for tables returned by list_tables. Read-only tools execute automatically. Never execute mutating SQL. When the user explicitly requests a database change, use propose_mutation to queue it for approval; do not claim it has executed.';
 
