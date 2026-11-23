@@ -39,4 +39,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(ChatSession::class);
     }
+
+    /**
+     * @return HasMany<AiChatLog, $this>
+     */
+    public function aiChatLogs(): HasMany
+    {
+        return $this->hasMany(AiChatLog::class);
+    }
 }
