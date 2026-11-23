@@ -90,6 +90,65 @@ class TableSchemaIntegrationTest extends TestCase
         }
     }
 
+    /**
+     * analyze_table_bloat keeps 20 tables; they must be the largest ones, or the
+     * assistant cannot see which table is biggest in a database with many tables.
+     */
+    #[DataProvider('engines')]
+    public function test_the_bloat_report_lists_the_largest_tables_first(
+        DbDriver $engine, string $env, int $port, string $database, string $username,
+    ): void {
+        $project = Project::factory()->create([
+            'driver' => $engine,
+            'host' => env("TEST_{$env}_HOST", '127.0.0.1'),
+            'port' => (int) env("TEST_{$env}_PORT", $port),
+            'database' => env("TEST_{$env}_DATABASE", $database),
+            'username' => env("TEST_{$env}_USERNAME", $username),
+            'password' => env("TEST_{$env}_PASSWORD", 'secret'),
+        ]);
+
+        $manager = app(TargetConnectionManager::class);
+
+        try {
+            $connection = $manager->connect($project);
+            $connection->select('SELECT 1');
+        } catch (Throwable $e) {
+            $manager->purge($manager->connectionName($project));
+            $this->markTestSkipped("{$engine->value} not available: {$e->getMessage()}");
+        }
+
+        try {
+            // 21 small tables with dead rows (the old sort key), then one big table without any.
+            for ($i = 1; $i <= 21; $i++) {
+                $connection->statement("DROP TABLE IF EXISTS zz_bloat_small_{$i}");
+                $connection->statement("CREATE TABLE zz_bloat_small_{$i} (id INT PRIMARY KEY)");
+                $connection->statement("INSERT INTO zz_bloat_small_{$i} VALUES (1), (2)");
+                $connection->statement("DELETE FROM zz_bloat_small_{$i} WHERE id = 1");
+            }
+            $connection->statement('DROP TABLE IF EXISTS zz_bloat_big');
+            $connection->statement('CREATE TABLE zz_bloat_big (id INT PRIMARY KEY, payload VARCHAR(200))');
+            for ($chunk = 0; $chunk < 20; $chunk++) {
+                $values = implode(',', array_map(
+                    fn (int $n): string => '('.($chunk * 500 + $n).", '".str_repeat('x', 200)."')",
+                    range(1, 500),
+                ));
+                $connection->statement("INSERT INTO zz_bloat_big VALUES {$values}");
+            }
+            $connection->statement($engine === DbDriver::MySql ? 'ANALYZE TABLE zz_bloat_big' : 'ANALYZE zz_bloat_big');
+
+            $rows = DiagnosticTools::driverFor($engine->value)->analyzeTableBloat($connection);
+        } finally {
+            for ($i = 1; $i <= 21; $i++) {
+                $connection->statement("DROP TABLE IF EXISTS zz_bloat_small_{$i}");
+            }
+            $connection->statement('DROP TABLE IF EXISTS zz_bloat_big');
+            $manager->purge($manager->connectionName($project));
+        }
+
+        $this->assertCount(20, $rows);
+        $this->assertSame('zz_bloat_big', ((array) $rows[0])['table_name']);
+    }
+
     private function createTables(ConnectionInterface $connection): void
     {
         $this->dropTables($connection);

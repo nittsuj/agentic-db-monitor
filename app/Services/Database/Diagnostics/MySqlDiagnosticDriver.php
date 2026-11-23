@@ -87,7 +87,7 @@ class MySqlDiagnosticDriver implements DiagnosticDriver
                     ROUND(DATA_FREE/1024/1024,2) AS free_mb
              FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
-             ORDER BY DATA_FREE DESC
+             ORDER BY DATA_LENGTH + INDEX_LENGTH DESC
              LIMIT 20"
         );
     }

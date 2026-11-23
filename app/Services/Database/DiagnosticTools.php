@@ -41,7 +41,7 @@ class DiagnosticTools
 
             (new Tool)
                 ->as('analyze_table_bloat')
-                ->for('Return table size and bloat estimates (dead rows / free space).')
+                ->for('Return the 20 largest tables with their row counts (live_rows or estimated_rows), size, and bloat (dead rows / free space). Use it to find the biggest tables or the ones with the most rows.')
                 ->using(fn (): string => self::encode($driver->analyzeTableBloat($connection))),
         ];
     }

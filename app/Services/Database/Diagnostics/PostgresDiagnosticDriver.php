@@ -89,9 +89,10 @@ class PostgresDiagnosticDriver implements DiagnosticDriver
     {
         return $connection->select(
             'SELECT schemaname, relname AS table_name, n_live_tup AS live_rows, n_dead_tup AS dead_rows,
-                    ROUND((n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0)) * 100, 2) AS dead_pct
+                    ROUND((n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0)) * 100, 2) AS dead_pct,
+                    ROUND(pg_total_relation_size(relid) / 1024.0 / 1024.0, 2) AS total_mb
              FROM pg_stat_user_tables
-             ORDER BY n_dead_tup DESC
+             ORDER BY pg_total_relation_size(relid) DESC
              LIMIT 20'
         );
     }
