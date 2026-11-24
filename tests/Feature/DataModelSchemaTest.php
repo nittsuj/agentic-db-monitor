@@ -133,12 +133,11 @@ class DataModelSchemaTest extends TestCase
 
     public function test_composite_indexes_exist(): void
     {
-        $indexes = collect(\DB::select("SELECT sql FROM sqlite_master WHERE type='index'"))
-            ->pluck('sql')
-            ->filter()
-            ->implode("\n");
+        // Schema::getIndexes() reads the index list on every driver, so the
+        // test also holds when the suite runs against MySQL.
+        $columns = fn (string $table): array => array_column(Schema::getIndexes($table), 'columns');
 
-        $this->assertStringContainsString('chat_session_id', $indexes);
-        $this->assertStringContainsString('captured_at', $indexes);
+        $this->assertContains(['chat_session_id', 'created_at'], $columns('chat_messages'));
+        $this->assertContains(['project_id', 'key', 'captured_at'], $columns('metric_samples'));
     }
 }
