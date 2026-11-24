@@ -2,7 +2,11 @@
 set -e
 
 mkdir -p /data
-touch /data/database.sqlite
+
+# Only the SQLite driver needs a file; MySQL is its own service.
+if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
+    touch "${DB_DATABASE:-/data/database.sqlite}"
+fi
 
 # The persisted key is the source of truth. Project passwords and AI API keys
 # are encrypted with APP_KEY, so switching keys under an existing database
