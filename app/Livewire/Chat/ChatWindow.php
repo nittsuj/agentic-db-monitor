@@ -42,6 +42,9 @@ class ChatWindow extends Component
 {
     public const TOOLS_UNSUPPORTED_WARNING = 'This AI provider does not support function calling, so the diagnostic tools were unavailable and the assistant answered without live database data.';
 
+    /** Characters of the first prompt kept as a chat's title. */
+    public const TITLE_LENGTH = 60;
+
     public string $input = '';
 
     public string $assistantContent = '';
@@ -160,7 +163,8 @@ class ChatWindow extends Component
             $session = ChatSession::create([
                 'user_id' => $userId,
                 'project_id' => $this->activeProjectId,
-                'title' => 'Chat',
+                // Named after its first prompt once there is one.
+                'title' => null,
             ]);
         }
 
@@ -238,6 +242,8 @@ class ChatWindow extends Component
             'role' => ChatRole::User,
             'content' => $text,
         ]);
+
+        $this->nameSessionAfter($text);
 
         $connectionManager = app(TargetConnectionManager::class);
         $connectionName = null;
@@ -335,6 +341,18 @@ class ChatWindow extends Component
             $this->assistantContent = '';
             $this->isSending = false;
         }
+    }
+
+    /**
+     * An untitled chat takes its first prompt as title, so the session list
+     * can tell chats apart. "Chat" is the title older versions gave every one.
+     */
+    private function nameSessionAfter(string $prompt): void
+    {
+        ChatSession::query()
+            ->whereKey($this->chatSessionId)
+            ->where(fn ($query) => $query->whereNull('title')->orWhere('title', 'Chat'))
+            ->update(['title' => Str::limit(Str::squish($prompt), self::TITLE_LENGTH, preserveWords: true)]);
     }
 
     /**

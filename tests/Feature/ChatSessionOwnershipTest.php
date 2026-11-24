@@ -135,6 +135,35 @@ class ChatSessionOwnershipTest extends TestCase
             ->assertSet('chatSessionId', $current);
     }
 
+    public function test_a_new_chat_is_named_after_its_first_prompt(): void
+    {
+        $alice = User::factory()->create();
+        Prism::fake([
+            TextResponseFake::make()->withText('First reply.'),
+            TextResponseFake::make()->withText('Second reply.'),
+        ]);
+
+        $component = Livewire::actingAs($alice)->test(ChatWindow::class);
+        $session = ChatSession::findOrFail($component->get('chatSessionId'));
+        $this->assertNull($session->title);
+
+        $component->set('input', "  Why are   connections\npiling up on the orders table every night around midnight?  ")->call('send');
+        $component->set('input', 'And what about the users table?')->call('send');
+
+        $this->assertSame('Why are connections piling up on the orders table every...', $session->fresh()->title);
+    }
+
+    public function test_a_chat_with_a_title_keeps_it(): void
+    {
+        $alice = User::factory()->create();
+        $session = ChatSession::factory()->for($this->project)->for($alice)->create(['title' => 'Slow queries']);
+        Prism::fake([TextResponseFake::make()->withText('Reply.')]);
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)->set('input', 'Something else')->call('send');
+
+        $this->assertSame('Slow queries', $session->fresh()->title);
+    }
+
     public function test_old_sessions_without_a_user_are_not_shown_to_anyone(): void
     {
         $old = ChatSession::create(['project_id' => $this->project->id, 'title' => 'Old chat']);
