@@ -10,6 +10,7 @@ use App\Models\ChatSession;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Testing\TextResponseFake;
@@ -73,6 +74,22 @@ class ChatSessionOwnershipTest extends TestCase
         $bobSession = ChatSession::where('user_id', $bob->id)->sole();
 
         $this->assertSame(['Bob asks', 'Reply for Bob.'], $bobSession->messages()->orderBy('created_at')->pluck('content')->all());
+        $this->assertSame(0, $aliceSession->messages()->count());
+    }
+
+    public function test_the_browser_cannot_point_the_chat_at_another_users_session(): void
+    {
+        $alice = User::factory()->create();
+        $bob = User::factory()->create();
+        $aliceSession = ChatSession::factory()->for($this->project)->for($alice)->create();
+
+        try {
+            Livewire::actingAs($bob)->test(ChatWindow::class)->set('chatSessionId', $aliceSession->id);
+            $this->fail('The session id could be changed from the browser.');
+        } catch (CannotUpdateLockedPropertyException) {
+            // Expected: the property is locked.
+        }
+
         $this->assertSame(0, $aliceSession->messages()->count());
     }
 

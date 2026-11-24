@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Prism\Prism\Contracts\Message;
@@ -50,8 +51,14 @@ class ChatWindow extends Component
 
     public array $messages = [];
 
+    /**
+     * Set only on the server, after an ownership check: a value sent from the
+     * browser would let a user write into, and read, another user's chat.
+     */
+    #[Locked]
     public ?string $chatSessionId = null;
 
+    #[Locked]
     public ?string $activeProjectId = null;
 
     #[Computed]
