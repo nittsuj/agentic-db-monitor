@@ -14,6 +14,7 @@ use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyExceptio
 use Livewire\Livewire;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Testing\TextResponseFake;
+use RuntimeException;
 use Tests\TestCase;
 
 class ChatSessionOwnershipTest extends TestCase
@@ -162,6 +163,32 @@ class ChatSessionOwnershipTest extends TestCase
         Livewire::actingAs($alice)->test(ChatWindow::class)->set('input', 'Something else')->call('send');
 
         $this->assertSame('Slow queries', $session->fresh()->title);
+    }
+
+    public function test_sending_tells_the_session_list_and_marks_the_chat_as_recent(): void
+    {
+        $alice = User::factory()->create();
+        $session = ChatSession::factory()->for($this->project)->for($alice)->create(['updated_at' => now()->subWeek()]);
+        Prism::fake([TextResponseFake::make()->withText('Reply.')]);
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->set('input', 'Any locks?')
+            ->call('send')
+            ->assertDispatched('message-sent', sessionId: $session->id);
+
+        $this->assertTrue($session->fresh()->updated_at->isAfter(now()->subMinute()));
+    }
+
+    public function test_a_failed_reply_still_tells_the_session_list(): void
+    {
+        $alice = User::factory()->create();
+        Prism::shouldReceive('text')->andThrow(new RuntimeException('Provider unreachable'));
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->set('input', 'Any locks?')
+            ->call('send')
+            ->assertSet('errorMessage', fn ($message) => $message !== null)
+            ->assertDispatched('message-sent');
     }
 
     public function test_old_sessions_without_a_user_are_not_shown_to_anyone(): void

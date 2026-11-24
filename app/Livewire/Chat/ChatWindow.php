@@ -340,6 +340,11 @@ class ChatWindow extends Component
 
             $this->assistantContent = '';
             $this->isSending = false;
+
+            // The prompt is saved even when the reply fails, so the chat moved
+            // either way: bump it to the top of the session list.
+            ChatSession::whereKey($this->chatSessionId)->update(['updated_at' => now()]);
+            $this->dispatch('message-sent', sessionId: $this->chatSessionId);
         }
     }
 
