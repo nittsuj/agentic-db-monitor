@@ -50,9 +50,9 @@ trait ConnectionSshFields
         }
 
         return [
-            'sshHost' => ['required', 'string', 'max:255'],
+            'sshHost' => ['required', 'string', 'max:253'],
             'sshPort' => ['required', 'integer', 'between:1,65535'],
-            'sshUsername' => ['required', 'string', 'max:255'],
+            'sshUsername' => ['required', 'string', 'max:64'],
             'sshAuth' => ['required', Rule::in(['key', 'password'])],
             'sshPrivateKey' => [
                 Rule::requiredIf(fn (): bool => $this->sshAuth === 'key' && ! $this->sshHasStoredKey),
