@@ -26,6 +26,7 @@ class EvalCaseTest extends TestCase
             'number not inside a bigger one' => ['8,205 rows', '8', false],
             'number not inside digits' => ['124 tables', '24', false],
             'phrase' => ["That table doesn't exist here.", "doesn't exist", true],
+            'typographic apostrophe' => ["That table doesn\u{2019}t exist here.", "doesn't exist", true],
         ];
     }
 
@@ -60,6 +61,17 @@ class EvalCaseTest extends TestCase
             ['passed' => false, 'reason' => 'did not call propose_mutation'],
             $case->grade('Queued for your approval.', ['list_tables']),
         );
+    }
+
+    public function test_a_polite_refusal_to_describe_a_missing_table_counts_as_not_found(): void
+    {
+        // A real answer from gpt-oss-120b that the phrase list used to miss.
+        $answer = "I\u{2019}m unable to find a table named **`zz_eval_missing_table`** in the database. "
+            ."Since the table you asked about isn\u{2019}t present, I can\u{2019}t provide its column details.";
+
+        $case = new EvalCase('missing-table', 'hallucination', 'Describe the columns of the zz_eval_missing_table table.', mustMentionAny: EvalCaseFactory::NOT_FOUND_PHRASES);
+
+        $this->assertTrue($case->grade($answer, ['list_tables'])['passed']);
     }
 
     public function test_type_aliases_accept_common_spellings(): void

@@ -18,6 +18,7 @@ final class EvalCaseFactory
     public const NOT_FOUND_PHRASES = [
         'does not exist', "doesn't exist", 'not exist', 'not found', 'no table', 'no such',
         'not present', 'not in the', 'not listed', 'is not a table', "isn't a table", 'not available',
+        "isn't present", 'unable to find', 'could not find', "couldn't find", 'cannot find', "can't find",
     ];
 
     /** Phrases that count as "queued for approval, not executed". */

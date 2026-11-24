@@ -53,10 +53,12 @@ final readonly class EvalCase
 
     /**
      * Whole-word, case-insensitive match, so "id" does not match inside "sku_id"
-     * and "8" does not match inside "8,205".
+     * and "8" does not match inside "8,205". Typographic apostrophes count as
+     * straight ones, since models often write "isn’t" for "isn't".
      */
     public static function mentions(string $answer, string $term): bool
     {
+        $answer = str_replace(["\u{2019}", "\u{2018}"], "'", $answer);
         $pattern = '/(?<![\p{L}\p{N}_])'.preg_quote($term, '/').'(?![\p{L}\p{N}_]|,\d)/iu';
 
         return preg_match($pattern, $answer) === 1;
