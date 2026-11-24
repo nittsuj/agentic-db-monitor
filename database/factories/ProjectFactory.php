@@ -22,7 +22,8 @@ class ProjectFactory extends Factory
             'driver' => DbDriver::MySql,
             'host' => '127.0.0.1',
             'port' => 3306,
-            'database' => fake()->slug(),
+            // slug() alone can pass the 64-character limit the forms enforce.
+            'database' => fake()->slug(3),
             'username' => fake()->userName(),
             'password' => 'secret',
             'options' => [],
