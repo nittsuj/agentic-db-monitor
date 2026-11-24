@@ -26,6 +26,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Prism\Prism\Contracts\Message;
@@ -164,6 +165,33 @@ class ChatWindow extends Component
         }
 
         $this->chatSessionId = $session->id;
+    }
+
+    /**
+     * Open one of the user's chats on the active project, as picked in the
+     * session list. The id comes from the browser, so a chat that belongs to
+     * someone else, or to another project, is refused.
+     */
+    #[On('session-selected')]
+    public function openSession(string $sessionId): void
+    {
+        if ($this->isSending || $this->activeProjectId === null) {
+            return;
+        }
+
+        $session = ChatSession::query()
+            ->where('user_id', auth()->id())
+            ->where('project_id', $this->activeProjectId)
+            ->find($sessionId);
+
+        if ($session === null) {
+            return;
+        }
+
+        $this->chatSessionId = $session->id;
+        $this->errorMessage = null;
+        $this->input = '';
+        $this->loadMessages();
     }
 
     private function loadMessages(): void

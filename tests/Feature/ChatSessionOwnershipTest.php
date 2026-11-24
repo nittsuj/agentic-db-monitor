@@ -93,6 +93,48 @@ class ChatSessionOwnershipTest extends TestCase
         $this->assertSame(0, $aliceSession->messages()->count());
     }
 
+    public function test_selecting_a_session_opens_it_and_shows_its_messages(): void
+    {
+        $alice = User::factory()->create();
+        $older = ChatSession::factory()->for($this->project)->for($alice)->create(['created_at' => now()->subDay()]);
+        ChatMessage::factory()->for($older)->create(['role' => 'user', 'content' => 'Question from yesterday']);
+        $newer = ChatSession::factory()->for($this->project)->for($alice)->create();
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->assertSet('chatSessionId', $newer->id)
+            ->assertDontSee('Question from yesterday')
+            ->dispatch('session-selected', sessionId: $older->id)
+            ->assertSet('chatSessionId', $older->id)
+            ->assertSee('Question from yesterday');
+    }
+
+    public function test_selecting_another_users_session_is_refused(): void
+    {
+        $alice = User::factory()->create();
+        $bob = User::factory()->create();
+        $aliceSession = ChatSession::factory()->for($this->project)->for($alice)->create();
+        ChatMessage::factory()->for($aliceSession)->create(['role' => 'user', 'content' => 'Alice private question']);
+
+        $component = Livewire::actingAs($bob)->test(ChatWindow::class);
+        $bobSession = $component->get('chatSessionId');
+
+        $component->dispatch('session-selected', sessionId: $aliceSession->id)
+            ->assertSet('chatSessionId', $bobSession)
+            ->assertDontSee('Alice private question');
+    }
+
+    public function test_selecting_a_session_of_another_project_is_refused(): void
+    {
+        $alice = User::factory()->create();
+        $otherProject = ChatSession::factory()->for(Project::factory())->for($alice)->create();
+
+        $component = Livewire::actingAs($alice)->test(ChatWindow::class);
+        $current = $component->get('chatSessionId');
+
+        $component->dispatch('session-selected', sessionId: $otherProject->id)
+            ->assertSet('chatSessionId', $current);
+    }
+
     public function test_old_sessions_without_a_user_are_not_shown_to_anyone(): void
     {
         $old = ChatSession::create(['project_id' => $this->project->id, 'title' => 'Old chat']);
