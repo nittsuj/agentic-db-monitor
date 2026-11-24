@@ -582,3 +582,11 @@
         max-height: 12rem;
     }
 }
+
+/* Syntax colours for highlighted code, from the app's own palette so they follow light and dark mode. */
+.hljs-keyword, .hljs-built_in, .hljs-selector-tag, .hljs-type { color: var(--adbm-info); font-weight: 500; }
+.hljs-string, .hljs-regexp, .hljs-attr, .hljs-selector-attr { color: var(--adbm-accent); }
+.hljs-number, .hljs-literal, .hljs-symbol { color: var(--adbm-warning); }
+.hljs-comment, .hljs-quote, .hljs-meta { color: var(--adbm-muted); font-style: italic; }
+.hljs-title, .hljs-section, .hljs-name, .hljs-tag { color: var(--adbm-danger); }
+.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-attribute { color: var(--adbm-text); }

@@ -1,3 +1,5 @@
+import { highlightCode } from './highlight';
+
 /**
  * Shell behaviour for the Agentic DB Monitor layout: the mobile navigation
  * drawer and the appearance toggle. Both are re-applied after a Livewire
@@ -51,3 +53,12 @@ function initShell() {
 
 document.addEventListener('DOMContentLoaded', initShell);
 document.addEventListener('livewire:navigated', initShell);
+
+// Highlight code in AI replies on page load and whenever Livewire re-renders a
+// component. Streamed tokens are not highlighted: each one replaces the reply,
+// and the finished reply is highlighted when the request's re-render lands.
+document.addEventListener('DOMContentLoaded', () => highlightCode());
+document.addEventListener('livewire:navigated', () => highlightCode());
+document.addEventListener('livewire:init', () => {
+    window.Livewire.hook('morphed', ({ el }) => highlightCode(el));
+});
