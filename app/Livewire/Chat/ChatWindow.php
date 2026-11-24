@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Services\Ai\AgentRegistry;
 use App\Services\Ai\AiErrorTranslator;
 use App\Services\Ai\AiProviderConfig;
+use App\Services\Ai\CodeBlocks;
 use App\Services\Ai\HiddenTagStreamFilter;
 use App\Services\Ai\ProposeMutationTool;
 use App\Services\Ai\ToolExecutionRecorder;
@@ -80,6 +81,20 @@ class ChatWindow extends Component
     public function projects(): Collection
     {
         return Project::query()->orderBy('name')->get(['id', 'name', 'driver', 'database']);
+    }
+
+    /**
+     * Code blocks of the latest assistant reply, for the code panel. Empty
+     * when that reply has none, which hides the panel.
+     *
+     * @return list<array{language: string, code: string}>
+     */
+    #[Computed]
+    public function codeBlocks(): array
+    {
+        $reply = collect($this->messages)->last(fn (array $message): bool => $message['role'] === 'assistant');
+
+        return $reply === null ? [] : CodeBlocks::extract((string) $reply['content']);
     }
 
     /** The active AI provider row, switched from the dropdown under the composer. */

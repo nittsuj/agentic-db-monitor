@@ -590,3 +590,40 @@
 .hljs-comment, .hljs-quote, .hljs-meta { color: var(--adbm-muted); font-style: italic; }
 .hljs-title, .hljs-section, .hljs-name, .hljs-tag { color: var(--adbm-danger); }
 .hljs-variable, .hljs-template-variable, .hljs-params, .hljs-attribute { color: var(--adbm-text); }
+
+/* Code panel: a third column with the latest reply's code, below the chat on narrower screens. */
+.chat-hub.has-code {
+    grid-template-columns: 250px minmax(0, 1fr) minmax(0, 0.9fr);
+}
+.chat-hub > .chat-code {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.chat-hub > .chat-code-reopen {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 30;
+    box-shadow: var(--adbm-shadow);
+}
+@media (max-width: 1279px) {
+    .chat-hub.has-code {
+        grid-template-columns: 250px minmax(0, 1fr);
+        height: auto;
+    }
+    .chat-hub.has-code > .card:nth-child(2) {
+        height: calc(100vh - 11rem);
+    }
+    .chat-hub.has-code > .chat-code {
+        grid-column: 1 / -1;
+        max-height: 28rem;
+    }
+}
+@media (max-width: 767px) {
+    .chat-hub.has-code {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

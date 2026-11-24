@@ -101,6 +101,50 @@ class ChatWindowTest extends TestCase
             ->assertDontSeeHtml('<script>alert(1)</script>');
     }
 
+    public function test_the_code_panel_shows_the_latest_replys_code_blocks(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => "```sql\nSELECT old_reply;\n```"]);
+        ChatMessage::factory()->for($session)->create(['role' => 'user', 'content' => 'Index advice?']);
+        ChatMessage::factory()->for($session)->create([
+            'role' => 'assistant',
+            'content' => "Add an index:\n\n```sql\nCREATE INDEX idx_orders_created ON orders (created_at);\n```\n\nThen:\n\n```bash\nphp artisan migrate\n```",
+        ]);
+
+        $component = Livewire::test(ChatWindow::class)->assertSeeHtml('aria-label="Kode dari jawaban terakhir"');
+
+        $this->assertSame(['sql', 'bash'], array_column($component->instance()->codeBlocks, 'language'));
+        $this->assertStringNotContainsString('old_reply', implode("\n", array_column($component->instance()->codeBlocks, 'code')));
+        $component->assertSeeHtml('<code x-ref="code0" class="language-sql">CREATE INDEX idx_orders_created ON orders (created_at);</code>');
+    }
+
+    public function test_no_code_panel_when_the_latest_reply_has_no_code(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'All good, nothing to change.']);
+
+        Livewire::test(ChatWindow::class)->assertDontSeeHtml('aria-label="Kode dari jawaban terakhir"');
+    }
+
+    public function test_html_in_the_code_panel_is_shown_as_text_never_run(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => "```html\n<script>alert(1)</script>\n```"]);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSeeHtml('class="language-html">&lt;script&gt;alert(1)&lt;/script&gt;</code>')
+            ->assertDontSeeHtml('<script>alert(1)</script>');
+    }
+
     public function test_assistant_replies_show_the_tools_they_used_once_each(): void
     {
         $project = Project::factory()->create();

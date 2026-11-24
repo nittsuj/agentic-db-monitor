@@ -7,7 +7,7 @@
 </x-slot:actions>
 
 
-<div class="chat-hub">
+<div class="chat-hub" x-data="{ showCode: true }" :class="{ 'has-code': showCode && {{ count($this->codeBlocks) > 0 ? 'true' : 'false' }} }">
 <aside class="card chat-sessions">
     {{-- Its own component: it talks to this one only through session-selected and message-sent. --}}
     <livewire:chat.session-list :active-session-id="$chatSessionId" key="chat-session-list" />
@@ -151,4 +151,55 @@
         </div>
     @endif
 </div>
+
+@if (count($this->codeBlocks) > 0)
+    {{-- Code from the latest reply, highlighted by resources/js/highlight.js. The
+         key changes with every new reply, so the tabs start over at the first block. --}}
+    <aside class="card chat-code" x-show="showCode" aria-label="Kode dari jawaban terakhir"
+           wire:key="code-panel-{{ count($messages) }}"
+           x-data="{ tab: 0, copied: false }">
+        <div class="od-row" style="gap:8px;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--adbm-border)">
+            <span class="od-row" style="gap:8px;font-weight:600;font-size:13.5px">
+                <svg class="od-icon"><use href="#i-tool" /></svg>
+                Kode
+            </span>
+            <button type="button" class="btn ghost sm" x-on:click="showCode = false" aria-label="Tutup panel kode">
+                <svg class="od-icon"><use href="#i-x" /></svg>
+            </button>
+        </div>
+
+        @if (count($this->codeBlocks) > 1)
+            <div class="od-cluster" role="tablist" style="gap:6px;padding:8px 12px 0">
+                @foreach ($this->codeBlocks as $index => $block)
+                    <button type="button" role="tab" class="btn sm"
+                            :class="tab === {{ $index }} ? 'primary' : 'ghost'"
+                            :aria-selected="tab === {{ $index }}"
+                            x-on:click="tab = {{ $index }}; copied = false">
+                        {{ $index + 1 }} · <span class="mono">{{ $block['language'] }}</span>
+                    </button>
+                @endforeach
+            </div>
+        @endif
+
+        @foreach ($this->codeBlocks as $index => $block)
+            <div class="od-stack md" style="gap:8px;padding:10px 12px;min-height:0;flex:1 1 auto" x-show="tab === {{ $index }}" role="tabpanel">
+                <div class="od-row" style="justify-content:space-between">
+                    <span class="badge mono">{{ $block['language'] }}</span>
+                    <button type="button" class="btn ghost sm"
+                            x-on:click="navigator.clipboard.writeText($refs.code{{ $index }}.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1500) })">
+                        <span x-text="copied ? 'Disalin' : 'Salin'">Salin</span>
+                    </button>
+                </div>
+                <pre style="margin:0;flex:1 1 auto;overflow:auto"><code x-ref="code{{ $index }}" class="language-{{ $block['language'] }}">{{ $block['code'] }}</code></pre>
+            </div>
+        @endforeach
+    </aside>
+@endif
+
+@if (count($this->codeBlocks) > 0)
+    <button type="button" class="btn sm chat-code-reopen" x-show="!showCode" x-on:click="showCode = true">
+        <svg class="od-icon"><use href="#i-tool" /></svg>
+        Tampilkan kode
+    </button>
+@endif
 </div>
