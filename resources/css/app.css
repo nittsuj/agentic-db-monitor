@@ -558,3 +558,27 @@
 }
 .md th { background: var(--adbm-panel); font-weight: 600; }
 .md hr { border: 0; border-top: 1px solid var(--adbm-border); margin: 12px 0; }
+
+/* Chat page: the session list beside the conversation, stacked on narrow screens. */
+.chat-hub {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 250px minmax(0, 1fr);
+    height: calc(100vh - 11rem);
+    min-height: 28rem;
+}
+.chat-hub > .chat-sessions {
+    padding: 12px;
+    min-height: 0;
+    overflow: hidden;
+}
+@media (max-width: 767px) {
+    .chat-hub {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(24rem, 1fr);
+        height: auto;
+    }
+    .chat-hub > .chat-sessions {
+        max-height: 12rem;
+    }
+}

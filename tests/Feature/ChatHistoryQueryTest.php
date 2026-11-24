@@ -142,7 +142,9 @@ class ChatHistoryQueryTest extends TestCase
         $component = Livewire::test(ChatWindow::class);
         $historyQueries = collect(DB::getQueryLog())
             ->pluck('query')
-            ->filter(fn (string $sql): bool => preg_match('/from ["`](chat_messages|tool_execution_logs|query_diagnosticians|metric_analyzers|mutation_planners)["`]/', $sql) === 1)
+            // Only queries that read these tables directly: the session list's
+            // message count is a subquery and does not grow with the history.
+            ->filter(fn (string $sql): bool => preg_match('/^select\b[^(]*?\bfrom ["`](chat_messages|tool_execution_logs|query_diagnosticians|metric_analyzers|mutation_planners)["`]/', $sql) === 1)
             ->count();
         DB::disableQueryLog();
 

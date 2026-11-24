@@ -7,7 +7,13 @@
 </x-slot:actions>
 
 
-<div class="card" style="padding:0;overflow:hidden;height:calc(100vh - 11rem);min-height:28rem;display:flex;flex-direction:column" x-data="{ pending: '' }">
+<div class="chat-hub">
+<aside class="card chat-sessions">
+    {{-- Its own component: it talks to this one only through session-selected and message-sent. --}}
+    <livewire:chat.session-list :active-session-id="$chatSessionId" key="chat-session-list" />
+</aside>
+
+<div class="card" style="padding:0;overflow:hidden;min-height:0;display:flex;flex-direction:column" x-data="{ pending: '' }">
     @if ($this->project === null)
         {{-- "Choose a database first": opens on load and again when Kirim is pressed without a project. --}}
         <div x-data="{ open: true }"
@@ -144,4 +150,5 @@
             <a href="{{ route('settings.ai') }}" class="muted small" style="flex:none">Kelola provider</a>
         </div>
     @endif
+</div>
 </div>
