@@ -76,10 +76,10 @@ class CreateProjectModal extends Component
         return [
             'name' => ['required', 'string', 'max:255'],
             'driver' => ['required', Rule::enum(DbDriver::class)],
-            'host' => ['required', 'string'],
+            'host' => ['required', 'string', 'max:253'],
             'port' => ['required', 'integer', 'between:1,65535'],
-            'database' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:255'],
+            'database' => ['required', 'string', 'max:64'],
+            'username' => ['required', 'string', 'max:64'],
             'password' => ['nullable', 'string'],
         ] + $this->connectionRules();
     }
