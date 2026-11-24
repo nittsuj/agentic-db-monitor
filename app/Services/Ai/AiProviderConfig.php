@@ -48,6 +48,16 @@ final class AiProviderConfig
             'api_key_required' => true,
             'models' => ['qwen3:14b'],
         ],
+        // Groq: fast hosted inference, served by Prism's own Groq driver (Chat
+        // Completions, with streaming and tool calls). Any model name is accepted;
+        // the default supports tool use and answers without a reasoning phase.
+        'groq' => [
+            'base_url' => 'https://api.groq.com/openai/v1',
+            'model' => 'llama-3.3-70b-versatile',
+            'prism' => 'groq',
+            'api_key_required' => true,
+            'models' => null,
+        ],
         // Dahl inference: an OpenAI Chat Completions endpoint, so it uses the same
         // chat-completions driver as the ITS gateway. Any model name is accepted.
         'dahl' => [

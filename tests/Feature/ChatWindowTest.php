@@ -334,6 +334,30 @@ class ChatWindowTest extends TestCase
         });
     }
 
+    public function test_send_uses_groqs_own_driver(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        AiSetting::factory()->create([
+            'provider' => 'groq',
+            'model' => 'llama-3.3-70b-versatile',
+            'base_url' => 'https://api.groq.com/openai/v1',
+            'api_key' => 'test-groq-key',
+        ]);
+
+        $fake = Prism::fake([TextResponseFake::make()->withText('Ready.')]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('input', 'Check the database.')
+            ->call('send')
+            ->assertHasNoErrors();
+
+        $fake->assertRequest(function ($recorded) {
+            $this->assertSame('groq', $recorded[0]->provider());
+            $this->assertSame('llama-3.3-70b-versatile', $recorded[0]->model());
+        });
+    }
+
     public function test_send_defaults_to_the_its_llm_gateway_when_unconfigured(): void
     {
         $project = Project::factory()->create();
