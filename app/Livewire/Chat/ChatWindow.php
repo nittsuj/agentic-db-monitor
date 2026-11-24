@@ -236,6 +236,7 @@ class ChatWindow extends Component
             $history = ChatMessage::where('chat_session_id', $this->chatSessionId)
                 ->whereIn('role', [ChatRole::User, ChatRole::Assistant, ChatRole::Tool])
                 ->latest('created_at')
+                ->latest('id')
                 ->limit(20)
                 ->get()
                 ->reverse()
