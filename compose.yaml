@@ -22,7 +22,10 @@ services:
       ADBM_SSH_STATE_DIR: /data/ssh
       SESSION_DRIVER: database
       CACHE_STORE: database
-      QUEUE_CONNECTION: sync
+      # Run by the worker the entrypoint starts, so a scan never blocks a page.
+      QUEUE_CONNECTION: database
+      # Pause between tables, so the scan progress bar visibly moves in a demo.
+      SCAN_TABLE_DELAY_MS: ${SCAN_TABLE_DELAY_MS:-0}
       LOG_CHANNEL: stderr
       PHP_CLI_SERVER_WORKERS: "4"
       TARGET_DB_HOST: ${TARGET_DB_HOST:-host.docker.internal}

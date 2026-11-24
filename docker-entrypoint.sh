@@ -33,6 +33,10 @@ fi
 # Metric collection, threshold alerts, approval expiry, and pruning.
 php artisan schedule:work &
 
+# Queued jobs: schema scans, and the metric collection the scheduler queues.
+# One try, with the scan job's own 600 s limit, so a stuck scan is marked failed.
+php artisan queue:work --tries=1 --timeout=600 &
+
 # --no-reload is required for PHP_CLI_SERVER_WORKERS; without it artisan serve
 # runs a single worker and one slow chat request blocks every other page.
 exec php artisan serve --host=0.0.0.0 --port=8000 --no-reload
