@@ -111,7 +111,7 @@ class AiSettingsFormTest extends TestCase
         Livewire::test(AiSettingsForm::class)
             ->set('provider', 'groq')
             ->assertSet('base_url', 'https://api.groq.com/openai/v1')
-            ->assertSet('model', 'llama-3.3-70b-versatile')
+            ->assertSet('model', 'openai/gpt-oss-120b')
             ->set('api_key_input', 'gsk_test_key')
             ->call('save')
             ->assertHasNoErrors();
@@ -119,7 +119,7 @@ class AiSettingsFormTest extends TestCase
         $setting = AiSetting::where('is_active', true)->first();
 
         $this->assertSame('groq', $setting->provider);
-        $this->assertSame('llama-3.3-70b-versatile', $setting->model);
+        $this->assertSame('openai/gpt-oss-120b', $setting->model);
         $this->assertSame('gsk_test_key', $setting->api_key);
     }
 
@@ -137,7 +137,7 @@ class AiSettingsFormTest extends TestCase
 
         Http::assertSent(fn ($request) => $request->url() === 'https://api.groq.com/openai/v1/chat/completions'
             && $request->hasHeader('Authorization', 'Bearer gsk_test_key')
-            && $request['model'] === 'llama-3.3-70b-versatile');
+            && $request['model'] === 'openai/gpt-oss-120b');
     }
 
     public function test_a_key_saved_for_one_provider_is_not_reused_for_another(): void

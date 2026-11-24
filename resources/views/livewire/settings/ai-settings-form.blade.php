@@ -89,7 +89,7 @@
                 <span class="mono">openai_compatible</span> — endpoint OpenAI Chat Completions, dipakai untuk LLM gateway ITS.
             </li>
             <li class="muted small">
-                <span class="mono">groq</span> — Groq (<span class="mono">api.groq.com</span>), inferensi cepat. Default <span class="mono">llama-3.3-70b-versatile</span>; API key dari console.groq.com.
+                <span class="mono">groq</span> — Groq (<span class="mono">api.groq.com</span>), inferensi cepat. Default <span class="mono">openai/gpt-oss-120b</span>; API key dari console.groq.com.
             </li>
             <li class="muted small">
                 <span class="mono">dahl</span> — Dahl inference (<span class="mono">inference.dahl.global</span>), format OpenAI Chat Completions.

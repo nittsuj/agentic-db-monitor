@@ -340,7 +340,7 @@ class ChatWindowTest extends TestCase
         session(['active_project_id' => $project->id]);
         AiSetting::factory()->create([
             'provider' => 'groq',
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => 'openai/gpt-oss-120b',
             'base_url' => 'https://api.groq.com/openai/v1',
             'api_key' => 'test-groq-key',
         ]);
@@ -354,7 +354,7 @@ class ChatWindowTest extends TestCase
 
         $fake->assertRequest(function ($recorded) {
             $this->assertSame('groq', $recorded[0]->provider());
-            $this->assertSame('llama-3.3-70b-versatile', $recorded[0]->model());
+            $this->assertSame('openai/gpt-oss-120b', $recorded[0]->model());
         });
     }
 

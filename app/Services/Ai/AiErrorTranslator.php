@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Ai;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Prism\Prism\Exceptions\PrismException;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
 use Prism\Prism\Exceptions\PrismRateLimitedException;
@@ -37,7 +38,16 @@ final class AiErrorTranslator
 
             $code = $exception->getCode();
 
-            return is_int($code) && $code >= 400 && $code < 600 ? $code : null;
+            if (is_int($code) && $code >= 400 && $code < 600) {
+                return $code;
+            }
+
+            // Some drivers (Groq among them) rethrow the HTTP error as a plain
+            // PrismException without its status; the response is still on the
+            // exception they wrapped.
+            $previous = $exception->getPrevious();
+
+            return $previous instanceof RequestException ? $previous->response->status() : null;
         }
 
         return null;

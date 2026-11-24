@@ -50,10 +50,10 @@ final class AiProviderConfig
         ],
         // Groq: fast hosted inference, served by Prism's own Groq driver (Chat
         // Completions, with streaming and tool calls). Any model name is accepted;
-        // the default supports tool use and answers without a reasoning phase.
+        // the default supports tool use (checked against the models a key can use).
         'groq' => [
             'base_url' => 'https://api.groq.com/openai/v1',
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => 'openai/gpt-oss-120b',
             'prism' => 'groq',
             'api_key_required' => true,
             'models' => null,
