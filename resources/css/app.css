@@ -627,3 +627,6 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* Alpine: keep x-cloak elements hidden until Alpine has started. */
+[x-cloak] { display: none !important; }

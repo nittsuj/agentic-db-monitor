@@ -145,6 +145,25 @@ class ChatWindowTest extends TestCase
             ->assertDontSeeHtml('<script>alert(1)</script>');
     }
 
+    public function test_html_blocks_get_a_preview_in_a_fully_sandboxed_frame(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create([
+            'role' => 'assistant',
+            'content' => "```html\n<h1 onclick=\"steal()\">Hi</h1>\n```\n\n```sql\nSELECT 1;\n```",
+        ]);
+
+        $html = Livewire::test(ChatWindow::class)->html();
+
+        // One frame, for the HTML block only, with every sandbox restriction on.
+        $this->assertSame(1, substr_count($html, '<iframe'));
+        $this->assertStringContainsString('sandbox=""', $html);
+        $this->assertStringContainsString('srcdoc="&lt;h1 onclick=&quot;steal()&quot;&gt;Hi&lt;/h1&gt;"', $html);
+    }
+
     public function test_assistant_replies_show_the_tools_they_used_once_each(): void
     {
         $project = Project::factory()->create();

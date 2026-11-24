@@ -182,15 +182,30 @@
         @endif
 
         @foreach ($this->codeBlocks as $index => $block)
-            <div class="od-stack md" style="gap:8px;padding:10px 12px;min-height:0;flex:1 1 auto" x-show="tab === {{ $index }}" role="tabpanel">
-                <div class="od-row" style="justify-content:space-between">
+            @php($previewable = $block['language'] === 'html')
+            <div class="od-stack md" style="gap:8px;padding:10px 12px;min-height:0;flex:1 1 auto" x-show="tab === {{ $index }}" role="tabpanel"
+                 x-data="{ view: 'code' }">
+                <div class="od-row" style="gap:6px;justify-content:space-between">
                     <span class="badge mono">{{ $block['language'] }}</span>
-                    <button type="button" class="btn ghost sm"
-                            x-on:click="navigator.clipboard.writeText($refs.code{{ $index }}.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1500) })">
-                        <span x-text="copied ? 'Disalin' : 'Salin'">Salin</span>
-                    </button>
+                    <span class="od-row" style="gap:6px">
+                        @if ($previewable)
+                            <button type="button" class="btn sm" :class="view === 'code' ? 'primary' : 'ghost'" x-on:click="view = 'code'">Kode</button>
+                            <button type="button" class="btn sm" :class="view === 'preview' ? 'primary' : 'ghost'" x-on:click="view = 'preview'">Pratinjau</button>
+                        @endif
+                        <button type="button" class="btn ghost sm"
+                                x-on:click="navigator.clipboard.writeText($refs.code{{ $index }}.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1500) })">
+                            <span x-text="copied ? 'Disalin' : 'Salin'">Salin</span>
+                        </button>
+                    </span>
                 </div>
-                <pre style="margin:0;flex:1 1 auto;overflow:auto"><code x-ref="code{{ $index }}" class="language-{{ $block['language'] }}">{{ $block['code'] }}</code></pre>
+                <pre x-show="view === 'code'" style="margin:0;flex:1 1 auto;overflow:auto"><code x-ref="code{{ $index }}" class="language-{{ $block['language'] }}">{{ $block['code'] }}</code></pre>
+                @if ($previewable)
+                    {{-- An empty sandbox: no scripts, forms, popups, or access to this
+                         app's origin, so AI-written HTML can only be looked at. --}}
+                    <iframe x-show="view === 'preview'" x-cloak sandbox="" referrerpolicy="no-referrer" loading="lazy"
+                            title="Pratinjau HTML" srcdoc="{{ $block['code'] }}"
+                            style="flex:1 1 auto;width:100%;min-height:16rem;border:1px solid var(--adbm-border);border-radius:var(--adbm-radius-sm);background:#fff"></iframe>
+                @endif
             </div>
         @endforeach
     </aside>
