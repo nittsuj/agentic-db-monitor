@@ -4,7 +4,10 @@ AI-assisted database monitoring and troubleshooting as a local desktop app. Chat
 
 ## How it works
 
-- **Chat** (`/chat`): ask about the active project's database. The assistant (via Prism) calls read-only diagnostic tools on its own: list tables, table schema, slow queries, connection pool, table bloat, and the telemetry summary of the active project. If the configured provider rejects function calling, the chat drops to a tool-free mode and says so.
+- **Chat** (`/chat`): ask about the active project's database. The assistant (via Prism) calls read-only diagnostic tools on its own: list tables, table schema, slow queries, connection pool, table bloat, and the telemetry summary of the active project. If the configured provider rejects function calling, the chat drops to a tool-free mode and says so. Replies stream in as they are written.
+- **Chat sessions**: the list beside the chat holds your chats on the active project, most recent first, each named after its first prompt. **Chat baru** starts one. The list and the chat window are separate Livewire components that talk only through events (`session-selected`, `message-sent`), and a chat that is not yours cannot be opened.
+- **Code panel**: code blocks in the latest reply appear in a panel beside the chat, highlighted (highlight.js), one tab per block, with a copy button. HTML blocks can be previewed in a fully sandboxed frame.
+- **Schema scan** (`/scan`): a queued job reads every table of the active project's database and reports tables without a primary key and foreign keys without an index. The page follows its progress with `wire:poll` and stops polling when the scan ends.
 - **Writes need approval**: the assistant can only *propose* a change. It is queued as Pending and runs only after you approve it in **Approvals** (`/approvals`). Executed, failed, and denied actions are all recorded in the action log. Proposals with more than one statement are rejected, and pending proposals expire after 24 hours.
 - **Dashboard** (`/dashboard`): a KPI row, metric charts over 5m/15m/1h/6h/24h/48h, threshold breach flags (managed under **Thresholds**, `/thresholds`), and a source badge (Live or DBPA replay). For replay data a panel lists the five signals that deviate most between the anomaly and the Normal window.
 - **Projects**: the sidebar switches the active project. **Kelola** edits a project's connection (an empty password keeps the stored one) or deletes it together with its chat, metrics, thresholds, and pending proposals; the audit log is kept.
@@ -12,7 +15,7 @@ AI-assisted database monitoring and troubleshooting as a local desktop app. Chat
 - **Monitoring**: a scheduled collector records `connection_pool_used` and `slow_queries_per_min` for every active project every five minutes, evaluates enabled thresholds, and stores one database notification per breach per 15-minute cooldown.
 - **Retention**: metric samples older than 48 hours are pruned hourly; `php artisan telemetry:clear` clears them on demand.
 
-The app stores its own data in SQLite. The databases you monitor are MySQL or PostgreSQL servers, connected only while a request needs them.
+The app stores its own data in MySQL (8.0.13 or newer; the tests also run on in-memory SQLite). The databases you monitor are MySQL or PostgreSQL servers, connected only while a request needs them.
 
 ## Diagnostic tools
 
@@ -40,7 +43,7 @@ The trade-off: in a database with more than 20 tables, the smallest ones are not
 
 ## Scheduled jobs
 
-`php artisan schedule:work` runs these; the Docker image starts it next to the web server.
+`php artisan schedule:work` runs these; the Docker image starts it next to the web server. `CollectMetrics` and schema scans are queued jobs, so they also need a queue worker (`php artisan queue:work`), which the Docker image starts too.
 
 | Command | Cadence | What it does |
 | --- | --- | --- |
@@ -76,9 +79,12 @@ SEED_DEMO=true docker compose up --build           # bash
 
 Notes:
 - The app is published on `127.0.0.1` only; it is a single-user local tool, not a network service.
-- App data and the generated app key live in the `app-data` Docker volume. Reset everything with `docker compose down -v`.
+- Compose starts two services: `app`, and `mysql` (MySQL 8.4) for the app's own data. `app` waits until MySQL is healthy, then migrates.
+- MySQL is also published on `127.0.0.1:3307` (database `agentic_db_monitor`, user `adbm`, password `adbm-secret` unless `DB_PASSWORD` is set), so you can watch `chat_messages` fill up from any MySQL client.
+- App data lives in the `mysql-data` volume, the generated app key in `app-data`. Reset everything with `docker compose down -v`.
 - The key persisted in that volume always wins over an `APP_KEY` environment variable. Project passwords and API keys are encrypted with it, so switching keys under an existing database would make them undecryptable.
-- The container runs `php artisan schedule:work` next to the web server, so collection, alerts, approval expiry, and pruning run automatically.
+- The container runs `php artisan schedule:work` and `php artisan queue:work` next to the web server, so collection, alerts, approval expiry, pruning and schema scans run automatically.
+- For a demo, `SCAN_TABLE_DELAY_MS=400 docker compose up` pauses after each scanned table, so the progress bar visibly moves even on a small database.
 - From inside the container, a service on your own machine is `host.docker.internal`, not `localhost`. Use it for a local Ollama (`http://host.docker.internal:11434`) and for the host of a monitored database.
 
 ## Option 2: Local setup
@@ -88,8 +94,10 @@ Requirements:
 - PHP 8.4 or newer (the locked dependencies need it; `composer.json` alone says ^8.3)
 - Composer
 - Node.js + npm
+- MySQL 8.0.13 or newer. `.env.example` points at the `mysql` service of `compose.yaml`, so the quickest way is to start only that service (`DB_*` in `.env` can point at any other server)
 
 ```bash
+docker compose up -d mysql
 composer setup
 php artisan db:seed    # optional demo data
 composer dev
@@ -97,10 +105,11 @@ composer dev
 
 `composer setup` installs dependencies, creates `.env`, generates an app key, runs migrations, and builds frontend assets. `composer dev` starts the dev server.
 
-The scheduler is not part of `composer dev`; run it in a second terminal:
+The scheduler and the queue worker are not part of `composer dev`; run them in their own terminals. Without the worker, schema scans stay at "Menunggu worker antrean…":
 
 ```bash
 php artisan schedule:work
+php artisan queue:work
 ```
 
 ## DBPA replay data (optional)
@@ -339,7 +348,13 @@ TEST_PGSQL_PORT=55432 TEST_MYSQL_PORT=53306 php artisan test
 docker stop zz-test-pg zz-test-mysql   # they delete themselves when stopped
 ```
 
-Besides `PORT`, `TEST_PGSQL_*` and `TEST_MYSQL_*` take `HOST`, `DATABASE`, `USERNAME` and `PASSWORD`. These tests create and drop their own `zz_*` tables. The two older tests in `DiagnosticToolsTest` always use the default ports and stay skipped with this setup.
+Besides `PORT`, `TEST_PGSQL_*` and `TEST_MYSQL_*` take `HOST`, `DATABASE`, `USERNAME` and `PASSWORD`; `ScanDatabaseTest` uses `TEST_MYSQL_*` as well. These tests create and drop their own `zz_*` tables. The two older tests in `DiagnosticToolsTest` always use the default ports and stay skipped with this setup.
+
+The suite runs on in-memory SQLite by default. To run all of it against MySQL, the database the app uses, override the connection (the tests empty that database, so use a throwaway one):
+
+```bash
+DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=53306 DB_DATABASE=playground DB_USERNAME=root DB_PASSWORD=secret DB_URL= php artisan test
+```
 
 ## Docs
 
