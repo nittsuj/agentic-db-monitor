@@ -24,7 +24,7 @@ class DiagnosticTools
 
             (new Tool)
                 ->as('get_table_schema')
-                ->for('Get column definitions for a known table. Only call for tables returned by list_tables. Max 2-3 calls per request.')
+                ->for('Get the columns, indexes and foreign keys of a known table. Each foreign key says whether an index supports it, and unindexed_foreign_keys lists those that have none. Only call for tables returned by list_tables. Max 2-3 calls per request.')
                 ->withParameter(new StringSchema('table', 'Exact table name from list_tables'))
                 ->using(fn (string $table): string => self::encode($driver->getTableSchema($connection, $table))),
 
@@ -41,7 +41,7 @@ class DiagnosticTools
 
             (new Tool)
                 ->as('analyze_table_bloat')
-                ->for('Return table size and bloat estimates (dead rows / free space).')
+                ->for('Return the 20 largest tables with their row counts (live_rows or estimated_rows), size, and bloat (dead rows / free space). Use it to find the biggest tables or the ones with the most rows.')
                 ->using(fn (): string => self::encode($driver->analyzeTableBloat($connection))),
         ];
     }

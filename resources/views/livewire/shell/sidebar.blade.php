@@ -61,6 +61,12 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('scan') }}" @if(request()->routeIs('scan')) aria-current="page" @endif>
+                    <svg class="od-icon"><use href="#i-eye" /></svg>
+                    Scan skema
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('settings.ai') }}" @if(request()->routeIs('settings.ai')) aria-current="page" @endif>
                     <svg class="od-icon"><use href="#i-gear" /></svg>
                     Pengaturan AI

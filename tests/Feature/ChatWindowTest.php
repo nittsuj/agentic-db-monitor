@@ -101,6 +101,69 @@ class ChatWindowTest extends TestCase
             ->assertDontSeeHtml('<script>alert(1)</script>');
     }
 
+    public function test_the_code_panel_shows_the_latest_replys_code_blocks(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => "```sql\nSELECT old_reply;\n```"]);
+        ChatMessage::factory()->for($session)->create(['role' => 'user', 'content' => 'Index advice?']);
+        ChatMessage::factory()->for($session)->create([
+            'role' => 'assistant',
+            'content' => "Add an index:\n\n```sql\nCREATE INDEX idx_orders_created ON orders (created_at);\n```\n\nThen:\n\n```bash\nphp artisan migrate\n```",
+        ]);
+
+        $component = Livewire::test(ChatWindow::class)->assertSeeHtml('aria-label="Kode dari jawaban terakhir"');
+
+        $this->assertSame(['sql', 'bash'], array_column($component->instance()->codeBlocks, 'language'));
+        $this->assertStringNotContainsString('old_reply', implode("\n", array_column($component->instance()->codeBlocks, 'code')));
+        $component->assertSeeHtml('<code x-ref="code0" class="language-sql">CREATE INDEX idx_orders_created ON orders (created_at);</code>');
+    }
+
+    public function test_no_code_panel_when_the_latest_reply_has_no_code(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => 'All good, nothing to change.']);
+
+        Livewire::test(ChatWindow::class)->assertDontSeeHtml('aria-label="Kode dari jawaban terakhir"');
+    }
+
+    public function test_html_in_the_code_panel_is_shown_as_text_never_run(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create(['role' => 'assistant', 'content' => "```html\n<script>alert(1)</script>\n```"]);
+
+        Livewire::test(ChatWindow::class)
+            ->assertSeeHtml('class="language-html">&lt;script&gt;alert(1)&lt;/script&gt;</code>')
+            ->assertDontSeeHtml('<script>alert(1)</script>');
+    }
+
+    public function test_html_blocks_get_a_preview_in_a_fully_sandboxed_frame(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        $session = ChatSession::factory()->for($project)->for($this->user)->create();
+
+        ChatMessage::factory()->for($session)->create([
+            'role' => 'assistant',
+            'content' => "```html\n<h1 onclick=\"steal()\">Hi</h1>\n```\n\n```sql\nSELECT 1;\n```",
+        ]);
+
+        $html = Livewire::test(ChatWindow::class)->html();
+
+        // One frame, for the HTML block only, with every sandbox restriction on.
+        $this->assertSame(1, substr_count($html, '<iframe'));
+        $this->assertStringContainsString('sandbox=""', $html);
+        $this->assertStringContainsString('srcdoc="&lt;h1 onclick=&quot;steal()&quot;&gt;Hi&lt;/h1&gt;"', $html);
+    }
+
     public function test_assistant_replies_show_the_tools_they_used_once_each(): void
     {
         $project = Project::factory()->create();
@@ -268,6 +331,30 @@ class ChatWindowTest extends TestCase
         $fake->assertRequest(function ($recorded) {
             $this->assertSame('openai', $recorded[0]->provider());
             $this->assertSame('gpt-4.1-mini', $recorded[0]->model());
+        });
+    }
+
+    public function test_send_uses_groqs_own_driver(): void
+    {
+        $project = Project::factory()->create();
+        session(['active_project_id' => $project->id]);
+        AiSetting::factory()->create([
+            'provider' => 'groq',
+            'model' => 'openai/gpt-oss-120b',
+            'base_url' => 'https://api.groq.com/openai/v1',
+            'api_key' => 'test-groq-key',
+        ]);
+
+        $fake = Prism::fake([TextResponseFake::make()->withText('Ready.')]);
+
+        Livewire::test(ChatWindow::class)
+            ->set('input', 'Check the database.')
+            ->call('send')
+            ->assertHasNoErrors();
+
+        $fake->assertRequest(function ($recorded) {
+            $this->assertSame('groq', $recorded[0]->provider());
+            $this->assertSame('openai/gpt-oss-120b', $recorded[0]->model());
         });
     }
 

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Services\Ai\AiErrorTranslator;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use PHPUnit\Framework\TestCase;
 use Prism\Prism\Exceptions\PrismException;
 use Prism\Prism\Exceptions\PrismProviderOverloadedException;
@@ -21,6 +24,18 @@ class AiErrorTranslatorTest extends TestCase
         );
 
         $this->assertStringContainsString('rejected the API key', $message);
+    }
+
+    public function test_reads_the_status_of_a_wrapped_http_error(): void
+    {
+        // How Prism's Groq driver reports a rejected key: no status of its own.
+        $response = new Response(new Psr7Response(401, [], '{"error":{"message":"Invalid API Key","code":"invalid_api_key"}}'));
+        $exception = new PrismException('Groq Error [401]: invalid_request_error - Invalid API Key', 0, new RequestException($response));
+
+        $this->assertSame(
+            'The AI provider rejected the API key. Check the key in AI settings.',
+            (new AiErrorTranslator)->translate($exception),
+        );
     }
 
     public function test_translates_rate_limits(): void

@@ -11,7 +11,11 @@ interface DiagnosticDriver
     /** @return array<int, string> */
     public function listTables(ConnectionInterface $connection): array;
 
-    /** @return array<int, array<string, mixed>> */
+    /**
+     * Columns, indexes and foreign keys of one table; see TableSchema::build().
+     *
+     * @return array<string, mixed>
+     */
     public function getTableSchema(ConnectionInterface $connection, string $table): array;
 
     /** @return array<int, array<string, mixed>> */

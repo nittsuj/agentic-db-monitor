@@ -1,6 +1,9 @@
 services:
   app:
     build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       # Local single-user app: keep it off every network interface.
       - "127.0.0.1:8000:8000"
@@ -9,13 +12,20 @@ services:
       APP_DEBUG: "false"
       APP_URL: http://localhost:8000
       APP_KEY: ${APP_KEY:-}
-      DB_CONNECTION: sqlite
-      DB_DATABASE: /data/database.sqlite
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: agentic_db_monitor
+      DB_USERNAME: adbm
+      DB_PASSWORD: ${DB_PASSWORD:-adbm-secret}
       # Pinned bastion host keys must survive rebuilds.
       ADBM_SSH_STATE_DIR: /data/ssh
       SESSION_DRIVER: database
       CACHE_STORE: database
-      QUEUE_CONNECTION: sync
+      # Run by the worker the entrypoint starts, so a scan never blocks a page.
+      QUEUE_CONNECTION: database
+      # Pause between tables, so the scan progress bar visibly moves in a demo.
+      SCAN_TABLE_DELAY_MS: ${SCAN_TABLE_DELAY_MS:-0}
       LOG_CHANNEL: stderr
       PHP_CLI_SERVER_WORKERS: "4"
       TARGET_DB_HOST: ${TARGET_DB_HOST:-host.docker.internal}
@@ -28,5 +38,25 @@ services:
       # `php artisan dbpa:import --path=/dbpa/csv` can load the replay data.
       - ./database/dbpa/csv:/dbpa/csv:ro
 
+  # The app's own database: users, chats, projects and their logs.
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: agentic_db_monitor
+      MYSQL_USER: adbm
+      MYSQL_PASSWORD: ${DB_PASSWORD:-adbm-secret}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports:
+      # Local only, so the chat tables can be inspected from a MySQL client.
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u adbm -p\"$$MYSQL_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   app-data:
+  mysql-data:

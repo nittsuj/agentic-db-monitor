@@ -33,13 +33,27 @@ return new class extends Migration
                         || ':' || COALESCE(options -> 'ssh' ->> 'username', '')
                     ELSE '' END
                 SQL,
-            default => throw new RuntimeException('The projects unique index supports SQLite and PostgreSQL only.'),
+            // MySQL indexes an expression only through a functional key part
+            // (8.0.13+), which must have a bounded type: 330 characters hold
+            // the longest host (253), port (5) and user name (64) the forms accept.
+            'mysql', 'mariadb' => <<<'SQL'
+                CAST(CASE WHEN JSON_EXTRACT(options, '$.ssh.enabled') = CAST('true' AS JSON)
+                    THEN CONCAT(
+                        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(options, '$.ssh.host')), ''),
+                        ':', COALESCE(JSON_UNQUOTE(JSON_EXTRACT(options, '$.ssh.port')), ''),
+                        ':', COALESCE(JSON_UNQUOTE(JSON_EXTRACT(options, '$.ssh.username')), ''))
+                    ELSE '' END AS CHAR(330))
+                SQL,
+            default => throw new RuntimeException('The projects unique index supports SQLite, PostgreSQL and MySQL only.'),
         };
+
+        // "database" is a reserved word; let the driver quote it.
+        $database = DB::getQueryGrammar()->wrap('database');
 
         // Create the new index before dropping the old one: SQLite does not
         // undo a partly applied migration, so a failure must leave the table
         // with an index, never without one.
-        DB::statement('CREATE UNIQUE INDEX '.self::INDEX.' ON projects (driver, host, port, "database", username, ('.$bastion.'))');
+        DB::statement('CREATE UNIQUE INDEX '.self::INDEX.' ON projects (driver, host, port, '.$database.', username, ('.$bastion.'))');
 
         Schema::table('projects', function (Blueprint $table) {
             $table->dropUnique(['driver', 'host', 'port', 'database', 'username']);
@@ -56,6 +70,8 @@ return new class extends Migration
             $table->unique(['driver', 'host', 'port', 'database', 'username']);
         });
 
-        DB::statement('DROP INDEX '.self::INDEX);
+        Schema::table('projects', function (Blueprint $table) {
+            $table->dropIndex(self::INDEX);
+        });
     }
 };

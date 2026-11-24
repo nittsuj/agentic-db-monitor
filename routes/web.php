@@ -5,6 +5,7 @@ use App\Livewire\Approvals\ApprovalQueue;
 use App\Livewire\Chat\ChatWindow;
 use App\Livewire\Dashboard\HealthDashboard;
 use App\Livewire\Projects\ThresholdManager;
+use App\Livewire\Scan\ScanProgress;
 use App\Livewire\Settings\AiSettingsForm;
 use App\Models\Project;
 use Illuminate\Http\Request;
@@ -25,13 +26,14 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/settings/ai', AiSettingsForm::class)->name('settings.ai');
     Route::get('/thresholds', ThresholdManager::class)->name('thresholds');
+    Route::get('/scan', ScanProgress::class)->name('scan');
 
     Route::get('/switch-project/{project}', function (Request $request, Project $project) {
         session(['active_project_id' => $project->id]);
 
         // Only known pages are accepted as a return target, never an arbitrary URL.
         $target = $request->query('to');
-        $allowed = ['dashboard', 'chat', 'approvals', 'thresholds'];
+        $allowed = ['dashboard', 'chat', 'approvals', 'thresholds', 'scan'];
 
         return redirect()->route(in_array($target, $allowed, true) ? $target : 'dashboard');
     })->name('switch-project');

@@ -106,6 +106,40 @@ class AiSettingsFormTest extends TestCase
         $this->assertSame('dahl-secret-key', $setting->api_key);
     }
 
+    public function test_switching_to_groq_fills_its_defaults_and_saves_its_key(): void
+    {
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'groq')
+            ->assertSet('base_url', 'https://api.groq.com/openai/v1')
+            ->assertSet('model', 'openai/gpt-oss-120b')
+            ->set('api_key_input', 'gsk_test_key')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $setting = AiSetting::where('is_active', true)->first();
+
+        $this->assertSame('groq', $setting->provider);
+        $this->assertSame('openai/gpt-oss-120b', $setting->model);
+        $this->assertSame('gsk_test_key', $setting->api_key);
+    }
+
+    public function test_connection_test_calls_the_groq_endpoint(): void
+    {
+        Http::fake([
+            'api.groq.com/*' => Http::response(['choices' => [['message' => ['content' => 'OK']]]]),
+        ]);
+
+        Livewire::test(AiSettingsForm::class)
+            ->set('provider', 'groq')
+            ->set('api_key_input', 'gsk_test_key')
+            ->call('testConnection')
+            ->assertSet('test_error', null);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.groq.com/openai/v1/chat/completions'
+            && $request->hasHeader('Authorization', 'Bearer gsk_test_key')
+            && $request['model'] === 'openai/gpt-oss-120b');
+    }
+
     public function test_a_key_saved_for_one_provider_is_not_reused_for_another(): void
     {
         Livewire::test(AiSettingsForm::class)

@@ -39,11 +39,12 @@ class DockerEntrypointTest extends TestCase
         $this->assertStringContainsString('php artisan key:generate --show > /data/app.key', $this->script);
     }
 
-    public function test_the_container_migrates_seeds_and_starts_the_scheduler(): void
+    public function test_the_container_migrates_seeds_and_starts_the_scheduler_and_queue_worker(): void
     {
         $this->assertStringContainsString('php artisan migrate --force', $this->script);
         $this->assertStringContainsString('php artisan db:seed --force', $this->script);
         $this->assertStringContainsString('php artisan schedule:work &', $this->script);
+        $this->assertStringContainsString('php artisan queue:work --tries=1 --timeout=600 &', $this->script);
         $this->assertStringContainsString('exec php artisan serve --host=0.0.0.0 --port=8000 --no-reload', $this->script);
     }
 }

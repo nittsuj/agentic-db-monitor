@@ -7,7 +7,13 @@
 </x-slot:actions>
 
 
-<div class="card" style="padding:0;overflow:hidden;height:calc(100vh - 11rem);min-height:28rem;display:flex;flex-direction:column" x-data="{ pending: '' }">
+<div class="chat-hub" x-data="{ showCode: true }" :class="{ 'has-code': showCode && {{ count($this->codeBlocks) > 0 ? 'true' : 'false' }} }">
+<aside class="card chat-sessions">
+    {{-- Its own component: it talks to this one only through session-selected and message-sent. --}}
+    <livewire:chat.session-list :active-session-id="$chatSessionId" key="chat-session-list" />
+</aside>
+
+<div class="card" style="padding:0;overflow:hidden;min-height:0;display:flex;flex-direction:column" x-data="{ pending: '' }">
     @if ($this->project === null)
         {{-- "Choose a database first": opens on load and again when Kirim is pressed without a project. --}}
         <div x-data="{ open: true }"
@@ -144,4 +150,71 @@
             <a href="{{ route('settings.ai') }}" class="muted small" style="flex:none">Kelola provider</a>
         </div>
     @endif
+</div>
+
+@if (count($this->codeBlocks) > 0)
+    {{-- Code from the latest reply, highlighted by resources/js/highlight.js. The
+         key changes with every new reply, so the tabs start over at the first block. --}}
+    <aside class="card chat-code" x-show="showCode" aria-label="Kode dari jawaban terakhir"
+           wire:key="code-panel-{{ count($messages) }}"
+           x-data="{ tab: 0, copied: false }">
+        <div class="od-row" style="gap:8px;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--adbm-border)">
+            <span class="od-row" style="gap:8px;font-weight:600;font-size:13.5px">
+                <svg class="od-icon"><use href="#i-tool" /></svg>
+                Kode
+            </span>
+            <button type="button" class="btn ghost sm" x-on:click="showCode = false" aria-label="Tutup panel kode">
+                <svg class="od-icon"><use href="#i-x" /></svg>
+            </button>
+        </div>
+
+        @if (count($this->codeBlocks) > 1)
+            <div class="od-cluster" role="tablist" style="gap:6px;padding:8px 12px 0">
+                @foreach ($this->codeBlocks as $index => $block)
+                    <button type="button" role="tab" class="btn sm"
+                            :class="tab === {{ $index }} ? 'primary' : 'ghost'"
+                            :aria-selected="tab === {{ $index }}"
+                            x-on:click="tab = {{ $index }}; copied = false">
+                        {{ $index + 1 }} · <span class="mono">{{ $block['language'] }}</span>
+                    </button>
+                @endforeach
+            </div>
+        @endif
+
+        @foreach ($this->codeBlocks as $index => $block)
+            @php($previewable = $block['language'] === 'html')
+            <div class="od-stack md" style="gap:8px;padding:10px 12px;min-height:0;flex:1 1 auto" x-show="tab === {{ $index }}" role="tabpanel"
+                 x-data="{ view: 'code' }">
+                <div class="od-row" style="gap:6px;justify-content:space-between">
+                    <span class="badge mono">{{ $block['language'] }}</span>
+                    <span class="od-row" style="gap:6px">
+                        @if ($previewable)
+                            <button type="button" class="btn sm" :class="view === 'code' ? 'primary' : 'ghost'" x-on:click="view = 'code'">Kode</button>
+                            <button type="button" class="btn sm" :class="view === 'preview' ? 'primary' : 'ghost'" x-on:click="view = 'preview'">Pratinjau</button>
+                        @endif
+                        <button type="button" class="btn ghost sm"
+                                x-on:click="navigator.clipboard.writeText($refs.code{{ $index }}.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1500) })">
+                            <span x-text="copied ? 'Disalin' : 'Salin'">Salin</span>
+                        </button>
+                    </span>
+                </div>
+                <pre x-show="view === 'code'" style="margin:0;flex:1 1 auto;overflow:auto"><code x-ref="code{{ $index }}" class="language-{{ $block['language'] }}">{{ $block['code'] }}</code></pre>
+                @if ($previewable)
+                    {{-- An empty sandbox: no scripts, forms, popups, or access to this
+                         app's origin, so AI-written HTML can only be looked at. --}}
+                    <iframe x-show="view === 'preview'" x-cloak sandbox="" referrerpolicy="no-referrer" loading="lazy"
+                            title="Pratinjau HTML" srcdoc="{{ $block['code'] }}"
+                            style="flex:1 1 auto;width:100%;min-height:16rem;border:1px solid var(--adbm-border);border-radius:var(--adbm-radius-sm);background:#fff"></iframe>
+                @endif
+            </div>
+        @endforeach
+    </aside>
+@endif
+
+@if (count($this->codeBlocks) > 0)
+    <button type="button" class="btn sm chat-code-reopen" x-show="!showCode" x-on:click="showCode = true">
+        <svg class="od-icon"><use href="#i-tool" /></svg>
+        Tampilkan kode
+    </button>
+@endif
 </div>

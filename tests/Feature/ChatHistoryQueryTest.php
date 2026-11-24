@@ -16,6 +16,7 @@ use App\Models\ToolExecutionLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -107,6 +108,24 @@ class ChatHistoryQueryTest extends TestCase
         $this->assertSame([$earlier->id, $later->id], $loaded->messages->first()->toolExecutionLogs->pluck('id')->all());
     }
 
+    public function test_messages_saved_in_the_same_second_keep_the_order_they_were_saved_in(): void
+    {
+        $session = ChatSession::factory()->create();
+        $second = now()->startOfSecond();
+
+        // UUIDv7 ids sort in the order they were made. The rows are inserted in
+        // the opposite order, so only the id can put them back in sequence.
+        $prompt = (string) Str::uuid7();
+        $reply = (string) Str::uuid7();
+
+        ChatMessage::factory()->for($session)->create(['id' => $reply, 'role' => ChatRole::Assistant, 'created_at' => $second]);
+        ChatMessage::factory()->for($session)->create(['id' => $prompt, 'role' => ChatRole::User, 'created_at' => $second]);
+
+        $loaded = ChatSession::withFullHistory()->findOrFail($session->id);
+
+        $this->assertSame([$prompt, $reply], $loaded->messages->pluck('id')->all());
+    }
+
     public function test_the_chat_page_loads_a_long_history_in_the_same_number_of_queries(): void
     {
         $user = User::factory()->create();
@@ -123,7 +142,9 @@ class ChatHistoryQueryTest extends TestCase
         $component = Livewire::test(ChatWindow::class);
         $historyQueries = collect(DB::getQueryLog())
             ->pluck('query')
-            ->filter(fn (string $sql): bool => preg_match('/from "(chat_messages|tool_execution_logs|query_diagnosticians|metric_analyzers|mutation_planners)"/', $sql) === 1)
+            // Only queries that read these tables directly: the session list's
+            // message count is a subquery and does not grow with the history.
+            ->filter(fn (string $sql): bool => preg_match('/^select\b[^(]*?\bfrom ["`](chat_messages|tool_execution_logs|query_diagnosticians|metric_analyzers|mutation_planners)["`]/', $sql) === 1)
             ->count();
         DB::disableQueryLog();
 

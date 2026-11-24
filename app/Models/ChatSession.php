@@ -57,8 +57,10 @@ class ChatSession extends Model
     public function scopeWithFullHistory(Builder $query): void
     {
         $query->with([
-            'messages' => fn ($messages) => $messages->orderBy('created_at'),
-            'messages.toolExecutionLogs' => fn ($logs) => $logs->orderBy('created_at'),
+            // created_at is whole seconds on MySQL; the time-ordered UUIDv7 id
+            // keeps rows saved within the same second in the order they were made.
+            'messages' => fn ($messages) => $messages->orderBy('created_at')->orderBy('id'),
+            'messages.toolExecutionLogs' => fn ($logs) => $logs->orderBy('created_at')->orderBy('id'),
             'messages.toolExecutionLogs.loggable',
         ]);
     }

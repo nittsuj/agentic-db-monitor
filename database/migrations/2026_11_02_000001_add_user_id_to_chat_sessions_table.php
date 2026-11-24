@@ -23,8 +23,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('chat_sessions', function (Blueprint $table) {
+            // The foreign key goes first: MySQL uses the composite index to
+            // back it, and refuses to drop an index a foreign key still needs.
+            $table->dropForeign(['user_id']);
             $table->dropIndex(['user_id', 'project_id']);
-            $table->dropConstrainedForeignId('user_id');
+            $table->dropColumn('user_id');
         });
     }
 };

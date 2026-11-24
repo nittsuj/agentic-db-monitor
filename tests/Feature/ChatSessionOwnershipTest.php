@@ -10,9 +10,11 @@ use App\Models\ChatSession;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Testing\TextResponseFake;
+use RuntimeException;
 use Tests\TestCase;
 
 class ChatSessionOwnershipTest extends TestCase
@@ -74,6 +76,119 @@ class ChatSessionOwnershipTest extends TestCase
 
         $this->assertSame(['Bob asks', 'Reply for Bob.'], $bobSession->messages()->orderBy('created_at')->pluck('content')->all());
         $this->assertSame(0, $aliceSession->messages()->count());
+    }
+
+    public function test_the_browser_cannot_point_the_chat_at_another_users_session(): void
+    {
+        $alice = User::factory()->create();
+        $bob = User::factory()->create();
+        $aliceSession = ChatSession::factory()->for($this->project)->for($alice)->create();
+
+        try {
+            Livewire::actingAs($bob)->test(ChatWindow::class)->set('chatSessionId', $aliceSession->id);
+            $this->fail('The session id could be changed from the browser.');
+        } catch (CannotUpdateLockedPropertyException) {
+            // Expected: the property is locked.
+        }
+
+        $this->assertSame(0, $aliceSession->messages()->count());
+    }
+
+    public function test_selecting_a_session_opens_it_and_shows_its_messages(): void
+    {
+        $alice = User::factory()->create();
+        $older = ChatSession::factory()->for($this->project)->for($alice)->create(['created_at' => now()->subDay()]);
+        ChatMessage::factory()->for($older)->create(['role' => 'user', 'content' => 'Question from yesterday']);
+        $newer = ChatSession::factory()->for($this->project)->for($alice)->create();
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->assertSet('chatSessionId', $newer->id)
+            ->assertDontSee('Question from yesterday')
+            ->dispatch('session-selected', sessionId: $older->id)
+            ->assertSet('chatSessionId', $older->id)
+            ->assertSee('Question from yesterday');
+    }
+
+    public function test_selecting_another_users_session_is_refused(): void
+    {
+        $alice = User::factory()->create();
+        $bob = User::factory()->create();
+        $aliceSession = ChatSession::factory()->for($this->project)->for($alice)->create();
+        ChatMessage::factory()->for($aliceSession)->create(['role' => 'user', 'content' => 'Alice private question']);
+
+        $component = Livewire::actingAs($bob)->test(ChatWindow::class);
+        $bobSession = $component->get('chatSessionId');
+
+        $component->dispatch('session-selected', sessionId: $aliceSession->id)
+            ->assertSet('chatSessionId', $bobSession)
+            ->assertDontSee('Alice private question');
+    }
+
+    public function test_selecting_a_session_of_another_project_is_refused(): void
+    {
+        $alice = User::factory()->create();
+        $otherProject = ChatSession::factory()->for(Project::factory())->for($alice)->create();
+
+        $component = Livewire::actingAs($alice)->test(ChatWindow::class);
+        $current = $component->get('chatSessionId');
+
+        $component->dispatch('session-selected', sessionId: $otherProject->id)
+            ->assertSet('chatSessionId', $current);
+    }
+
+    public function test_a_new_chat_is_named_after_its_first_prompt(): void
+    {
+        $alice = User::factory()->create();
+        Prism::fake([
+            TextResponseFake::make()->withText('First reply.'),
+            TextResponseFake::make()->withText('Second reply.'),
+        ]);
+
+        $component = Livewire::actingAs($alice)->test(ChatWindow::class);
+        $session = ChatSession::findOrFail($component->get('chatSessionId'));
+        $this->assertNull($session->title);
+
+        $component->set('input', "  Why are   connections\npiling up on the orders table every night around midnight?  ")->call('send');
+        $component->set('input', 'And what about the users table?')->call('send');
+
+        $this->assertSame('Why are connections piling up on the orders table every...', $session->fresh()->title);
+    }
+
+    public function test_a_chat_with_a_title_keeps_it(): void
+    {
+        $alice = User::factory()->create();
+        $session = ChatSession::factory()->for($this->project)->for($alice)->create(['title' => 'Slow queries']);
+        Prism::fake([TextResponseFake::make()->withText('Reply.')]);
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)->set('input', 'Something else')->call('send');
+
+        $this->assertSame('Slow queries', $session->fresh()->title);
+    }
+
+    public function test_sending_tells_the_session_list_and_marks_the_chat_as_recent(): void
+    {
+        $alice = User::factory()->create();
+        $session = ChatSession::factory()->for($this->project)->for($alice)->create(['updated_at' => now()->subWeek()]);
+        Prism::fake([TextResponseFake::make()->withText('Reply.')]);
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->set('input', 'Any locks?')
+            ->call('send')
+            ->assertDispatched('message-sent', sessionId: $session->id);
+
+        $this->assertTrue($session->fresh()->updated_at->isAfter(now()->subMinute()));
+    }
+
+    public function test_a_failed_reply_still_tells_the_session_list(): void
+    {
+        $alice = User::factory()->create();
+        Prism::shouldReceive('text')->andThrow(new RuntimeException('Provider unreachable'));
+
+        Livewire::actingAs($alice)->test(ChatWindow::class)
+            ->set('input', 'Any locks?')
+            ->call('send')
+            ->assertSet('errorMessage', fn ($message) => $message !== null)
+            ->assertDispatched('message-sent');
     }
 
     public function test_old_sessions_without_a_user_are_not_shown_to_anyone(): void

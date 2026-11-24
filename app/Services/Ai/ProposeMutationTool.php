@@ -13,6 +13,10 @@ use Prism\Prism\Tool;
 
 class ProposeMutationTool
 {
+    public const DESCRIPTION = 'Propose a mutating SQL statement (INSERT/UPDATE/DELETE/DDL/maintenance) for explicit user approval. The statement is NOT executed; it is queued for approval. Only use for statements the user has requested.';
+
+    public const COMMAND_DESCRIPTION = 'The exact SQL statement to propose';
+
     public static function make(
         Project $project,
         string $chatSessionId,
@@ -22,8 +26,8 @@ class ProposeMutationTool
 
         return (new Tool)
             ->as('propose_mutation')
-            ->for('Propose a mutating SQL statement (INSERT/UPDATE/DELETE/DDL/maintenance) for explicit user approval. The statement is NOT executed; it is queued for approval. Only use for statements the user has requested.')
-            ->withParameter(new StringSchema('command', 'The exact SQL statement to propose'))
+            ->for(self::DESCRIPTION)
+            ->withParameter(new StringSchema('command', self::COMMAND_DESCRIPTION))
             ->using(function (string $command) use ($project, $chatSessionId, $classifier): string {
                 if ($classifier->containsMultipleStatements($command)) {
                     return self::respond([

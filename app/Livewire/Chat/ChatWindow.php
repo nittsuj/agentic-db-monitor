@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Services\Ai\AgentRegistry;
 use App\Services\Ai\AiErrorTranslator;
 use App\Services\Ai\AiProviderConfig;
+use App\Services\Ai\CodeBlocks;
 use App\Services\Ai\HiddenTagStreamFilter;
 use App\Services\Ai\ProposeMutationTool;
 use App\Services\Ai\ToolExecutionRecorder;
@@ -25,6 +26,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Prism\Prism\Contracts\Message;
@@ -40,6 +43,9 @@ class ChatWindow extends Component
 {
     public const TOOLS_UNSUPPORTED_WARNING = 'This AI provider does not support function calling, so the diagnostic tools were unavailable and the assistant answered without live database data.';
 
+    /** Characters of the first prompt kept as a chat's title. */
+    public const TITLE_LENGTH = 60;
+
     public string $input = '';
 
     public string $assistantContent = '';
@@ -50,8 +56,14 @@ class ChatWindow extends Component
 
     public array $messages = [];
 
+    /**
+     * Set only on the server, after an ownership check: a value sent from the
+     * browser would let a user write into, and read, another user's chat.
+     */
+    #[Locked]
     public ?string $chatSessionId = null;
 
+    #[Locked]
     public ?string $activeProjectId = null;
 
     #[Computed]
@@ -69,6 +81,20 @@ class ChatWindow extends Component
     public function projects(): Collection
     {
         return Project::query()->orderBy('name')->get(['id', 'name', 'driver', 'database']);
+    }
+
+    /**
+     * Code blocks of the latest assistant reply, for the code panel. Empty
+     * when that reply has none, which hides the panel.
+     *
+     * @return list<array{language: string, code: string}>
+     */
+    #[Computed]
+    public function codeBlocks(): array
+    {
+        $reply = collect($this->messages)->last(fn (array $message): bool => $message['role'] === 'assistant');
+
+        return $reply === null ? [] : CodeBlocks::extract((string) $reply['content']);
     }
 
     /** The active AI provider row, switched from the dropdown under the composer. */
@@ -152,11 +178,39 @@ class ChatWindow extends Component
             $session = ChatSession::create([
                 'user_id' => $userId,
                 'project_id' => $this->activeProjectId,
-                'title' => 'Chat',
+                // Named after its first prompt once there is one.
+                'title' => null,
             ]);
         }
 
         $this->chatSessionId = $session->id;
+    }
+
+    /**
+     * Open one of the user's chats on the active project, as picked in the
+     * session list. The id comes from the browser, so a chat that belongs to
+     * someone else, or to another project, is refused.
+     */
+    #[On('session-selected')]
+    public function openSession(string $sessionId): void
+    {
+        if ($this->isSending || $this->activeProjectId === null) {
+            return;
+        }
+
+        $session = ChatSession::query()
+            ->where('user_id', auth()->id())
+            ->where('project_id', $this->activeProjectId)
+            ->find($sessionId);
+
+        if ($session === null) {
+            return;
+        }
+
+        $this->chatSessionId = $session->id;
+        $this->errorMessage = null;
+        $this->input = '';
+        $this->loadMessages();
     }
 
     private function loadMessages(): void
@@ -204,6 +258,8 @@ class ChatWindow extends Component
             'content' => $text,
         ]);
 
+        $this->nameSessionAfter($text);
+
         $connectionManager = app(TargetConnectionManager::class);
         $connectionName = null;
 
@@ -236,6 +292,7 @@ class ChatWindow extends Component
             $history = ChatMessage::where('chat_session_id', $this->chatSessionId)
                 ->whereIn('role', [ChatRole::User, ChatRole::Assistant, ChatRole::Tool])
                 ->latest('created_at')
+                ->latest('id')
                 ->limit(20)
                 ->get()
                 ->reverse()
@@ -298,7 +355,24 @@ class ChatWindow extends Component
 
             $this->assistantContent = '';
             $this->isSending = false;
+
+            // The prompt is saved even when the reply fails, so the chat moved
+            // either way: bump it to the top of the session list.
+            ChatSession::whereKey($this->chatSessionId)->update(['updated_at' => now()]);
+            $this->dispatch('message-sent', sessionId: $this->chatSessionId);
         }
+    }
+
+    /**
+     * An untitled chat takes its first prompt as title, so the session list
+     * can tell chats apart. "Chat" is the title older versions gave every one.
+     */
+    private function nameSessionAfter(string $prompt): void
+    {
+        ChatSession::query()
+            ->whereKey($this->chatSessionId)
+            ->where(fn ($query) => $query->whereNull('title')->orWhere('title', 'Chat'))
+            ->update(['title' => Str::limit(Str::squish($prompt), self::TITLE_LENGTH, preserveWords: true)]);
     }
 
     /**
@@ -337,7 +411,7 @@ class ChatWindow extends Component
                 'url' => $aiConfig['base_url'],
             ])
             ->withClientOptions(AiProviderConfig::clientOptions())
-            ->withSystemPrompt($this->systemPrompt($tools === []))
+            ->withSystemPrompt(self::systemPrompt($tools === []))
             ->withMessages($history)
             ->withMaxSteps(6);
 
@@ -359,7 +433,10 @@ class ChatWindow extends Component
         return trim((string) preg_replace('/<think>.*?<\/think>/s', '', $this->assistantContent));
     }
 
-    private function systemPrompt(bool $withoutTools): string
+    /**
+     * Also used by the assistant:eval command, so it scores the prompt the chat really sends.
+     */
+    public static function systemPrompt(bool $withoutTools): string
     {
         $prompt = 'You are a database diagnostics assistant. Use read-only diagnostic tools when they can answer the user\'s question. Only inspect table schemas when relevant, and only for tables returned by list_tables. Read-only tools execute automatically. Never execute mutating SQL. When the user explicitly requests a database change, use propose_mutation to queue it for approval; do not claim it has executed.';
 

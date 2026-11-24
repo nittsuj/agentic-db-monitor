@@ -19,12 +19,32 @@ class MySqlDiagnosticDriver implements DiagnosticDriver
 
     public function getTableSchema(ConnectionInterface $connection, string $table): array
     {
-        return $connection->select(
+        $columns = $connection->select(
             'SELECT COLUMN_NAME AS name, DATA_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS default_value, COLUMN_KEY AS key_type, EXTRA AS extra
              FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
              ORDER BY ORDINAL_POSITION',
             [$table]
+        );
+
+        return TableSchema::build(
+            $columns,
+            $connection->select(
+                "SELECT INDEX_NAME AS index_name, COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq,
+                        NON_UNIQUE = 0 AS is_unique, INDEX_NAME = 'PRIMARY' AS is_primary
+                 FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME IS NOT NULL
+                 ORDER BY INDEX_NAME, SEQ_IN_INDEX",
+                [$table]
+            ),
+            $connection->select(
+                'SELECT CONSTRAINT_NAME AS constraint_name, COLUMN_NAME AS column_name, ORDINAL_POSITION AS seq,
+                        REFERENCED_TABLE_NAME AS referenced_table, REFERENCED_COLUMN_NAME AS referenced_column
+                 FROM information_schema.KEY_COLUMN_USAGE
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+                 ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION',
+                [$table]
+            ),
         );
     }
 
@@ -67,7 +87,7 @@ class MySqlDiagnosticDriver implements DiagnosticDriver
                     ROUND(DATA_FREE/1024/1024,2) AS free_mb
              FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
-             ORDER BY DATA_FREE DESC
+             ORDER BY DATA_LENGTH + INDEX_LENGTH DESC
              LIMIT 20"
         );
     }
